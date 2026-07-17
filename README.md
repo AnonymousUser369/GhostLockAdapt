@@ -6,6 +6,8 @@ device codename `air`, build `AP3A.240905.015.A2` (Android 15), kernel **5.15.18
 This is a fork of the public CyberMeowfia/IonStack `CVE-2026-43499` exploit (which
 targets 6.x GKI Pixels). The `air` target is added and tuned for 5.15.180.
 
+Work mostly done by AI since its out of my league. 😅
+
 > **Status: does NOT achieve root on 5.15.180.** All setup/infrastructure works;
 > the core kernel stack-corruption primitive is incompatible with the 5.15 stack
 > layout. Details in `ANALYSIS.md`.
