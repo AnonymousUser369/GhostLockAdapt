@@ -107,10 +107,12 @@ minimal build only touches /data/local/tmp. Changes:
 ================================================================================
  5) Files UNCHANGED (byte-identical to upstream)
 ================================================================================
-fops.c, main.c, pipe.c, root.c, util.c, offset.h, su_blob.S, su_daemon.c,
+fops.c, main.c, pipe.c, root.c, offset.h, su_blob.S, su_daemon.c,
 wallpaper_blob.S, kernelsnitch/.  The core exploitation engine (physrw primitive,
 futex PI race, cred/SELinux overwrite) is untouched — only data (offsets) and
 build configuration differ.
+
+NOTE: util.c is NO LONGER unchanged — see section 8 (perf KASLR leak ported).
 
 ================================================================================
  6) Build artifact
@@ -126,3 +128,36 @@ build/air-AP3A.240905.015.A2/bin/preload.so
 pselect fd_set stack-overwrite cannot redirect the dangling rt_mutex_waiter on
 5.15.180: waiter at core_sys_select sp+0xc0, fd_set at sp+0x100 (64B too high).
 The merged run logs are in RUNLOGS.md.
+
+================================================================================
+ 8) util.c + main.c + common.h   [MODIFIED — perf KASLR leak ported]
+================================================================================
+Ported `perf_leak_text_base()` from the lamu/PD targets (other research fork).
+It is an ALTERNATE KASLR / text-base leak, NOT an alternate for the root stage.
+Our air fork already succeeds at KASLR via the pselect slide leak
+(`slide_leak_kernel_base`), so this is redundancy, not a fix for the 5.15
+do_select inlining blocker (that blocker is the stack-cover path, unrelated to KASLR).
+
+  util.c:
+    - + #include <linux/perf_event.h>
+    - + perf_leak_text_base()  (samples kernel IPs via PERF_COUNT_SW_CPU_CLOCK,
+      takes lowest kernel-text IP rounded to 2 MiB, derives _text via
+      P0_KERNEL_PHYS_DELTA; bails if /proc/sys/kernel/perf_event_paranoid > 1)
+  common.h:
+    - + uint64_t perf_leak_text_base(void);   (line ~424)
+  main.c (KASLR step, ~line 182):
+    - try perf first, fall back to slide:
+        uint64_t text_base = perf_leak_text_base();
+        if (text_base) { kaslr_base = text_base; kaslr_done = 1; (perf) }
+        else if (!slide_leak_kernel_base()) { fail; }
+
+Notes:
+  - perf needs perf_event_paranoid <= 1; on the air device SELinux may block
+    perf_event_open (paranoid > 1) -> silently falls back to the pselect slide
+    leak. No regression either way.
+  - Uses our existing P0_KERNEL_PHYS_DELTA (which is 0 for GKI, so it yields
+    the virtual _text directly). No new target.h constants required.
+  - Technique reference: reference-targets/adaptation-knowledge.md (section 4 + perf notes);
+    source: pubglite55/oppo-ghostlock lamu/PD targets.
+  - Built OK: preload.so sha 86317ae95b6acbe63bc3f0aee5ebc0daa822a6e9e3250f3ea3f3970c574e9d20
+    (make NDK_ROOT=/mnt/Data/AI_Workspace/android-ndk-r29).

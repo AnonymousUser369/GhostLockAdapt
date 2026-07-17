@@ -6,8 +6,6 @@ device codename `air`, build `AP3A.240905.015.A2` (Android 15), kernel **5.15.18
 This is a fork of the public CyberMeowfia/IonStack `CVE-2026-43499` exploit (which
 targets 6.x GKI Pixels). The `air` target is added and tuned for 5.15.180.
 
-Work mostly done by AI since its out of my league. 😅
-
 > **Status: does NOT achieve root on 5.15.180.** All setup/infrastructure works;
 > the core kernel stack-corruption primitive is incompatible with the 5.15 stack
 > layout. Details in `ANALYSIS.md`.
@@ -86,16 +84,23 @@ in this one. Add links here:
 
 ## Repository layout
 
-- `exploit/src/targets/air-AP3A.240905.015.A2/target.h` — the `air` port (offsets,
+- `CVE-2026-43499/exploit/src/targets/air-AP3A.240905.015.A2/target.h` — the `air` port (offsets,
   `SLIDE_KERNEL_BASE_KNOWN`, `MINIMAL_INSTALL`, 5.15 kmalloc tuning).
-- `exploit/src/{slide,fops,preload,common,main,util,pipe,root}.c` — shared source
+- `CVE-2026-43499/exploit/src/{slide,fops,preload,common,main,util,pipe,root}.c` — shared source
   (route logic; core engine unchanged from upstream).
-- `exploit/Makefile` — build.
+- `CVE-2026-43499/exploit/Makefile` — build.
+- `CVE-2026-43499/poc/poc.c` — minimal PoC.
 - `Target/kernel_5-15-180-vmlinux.elf` — 5.15 kernel image (frame analysis).
-- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets.
-- `kernel6.1_unpack/vmlinux-6.1.elf` — 6.1 GKI ELF (built from
+  Lives in the GitHub repo clone (`../ghostlock_repo/Target/` locally); not stored in this fork.
+- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets (in GitHub repo `Target/`).
+- `other/kernel6.1_unpack/vmlinux-6.1.elf` — 6.1 GKI ELF (built from
   `boot-6.1-allsyms.img` via `libmagiskboot.so unpack` + `vmlinux-to-elf`); used
   to confirm the `do_select` inlining difference vs 5.15.
+- `analysis-scripts/` — ELF frame-analysis helpers (find_deep_chains*, inspect_*).
+- `test-programs/` — standalone device probes (pselect NFDS, stamp, futex, ...).
+- `exploit-server/` — log_server.py + web viewer for on-device logs.
+- `reference-targets/` — adapted reference material (opp/lamu/PD/fuxi targets,
+  adaptation-knowledge.md). Not built; reference only.
 - `ANALYSIS.md`, `MODIFICATIONS.md`, `RUNLOGS.md` — this fork's notes.
 
 ## Disclaimer
