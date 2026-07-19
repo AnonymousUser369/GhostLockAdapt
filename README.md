@@ -92,17 +92,11 @@ in this one. Add links here:
   (route logic; core engine unchanged from upstream).
 - `CVE-2026-43499/exploit/Makefile` — build.
 - `CVE-2026-43499/poc/poc.c` — minimal PoC.
-- `Target/kernel_5-15-180-vmlinux.elf` — 5.15 kernel image (frame analysis).
-  Lives in the GitHub repo clone (`../ghostlock_repo/Target/` locally); not stored in this fork.
-- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets (in GitHub repo `Target/`).
-- `other/kernel6.1_unpack/vmlinux-6.1.elf` — 6.1 GKI ELF (built from
-  `boot-6.1-allsyms.img` via `libmagiskboot.so unpack` + `vmlinux-to-elf`); used
-  to confirm the `do_select` inlining difference vs 5.15.
-- `analysis-scripts/` — ELF frame-analysis helpers (find_deep_chains*, inspect_*).
-- `test-programs/` — standalone device probes (pselect NFDS, stamp, futex, ...).
-- `exploit-server/` — log_server.py + web viewer for on-device logs.
-- `reference-targets/` — adapted reference material (opp/lamu/PD/fuxi targets,
-  adaptation-knowledge.md). Not built; reference only.
+- `Target/kernel_5-15-180-vmlinux.elf` — 5.15 GKI vmlinux (frame analysis, no DWARF/BTF).
+- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets for 5.15.180.
+- `Target/kernel_5-15-180.config` — extracted GKI build config (CONFIG_IKCONFIG) for CVE reachability filtering.
+- `Target/vmlinux-6.1.elf` — 6.1 GKI ELF; used to confirm the `do_select` inlining
+  difference vs 5.15.
 - `ANALYSIS.md`, `MODIFICATIONS.md`, `RUNLOGS.md` — this fork's notes.
 
 ## Disclaimer
