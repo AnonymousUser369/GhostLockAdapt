@@ -104,6 +104,19 @@ minimal build only touches /data/local/tmp. Changes:
   (The wallpaper_blob.S / install_embedded_wallpaper code is dead-code-eliminated
    under MINIMAL_INSTALL; only string literals remain in .rodata.)
 
+su_daemon mechanics (verified in SU_DAEMON_NOTES.md):
+  - `su_daemon_aarch64_pie` is ONE binary doing dual jobs via argv[1]:
+    `su --daemon` = root-shell SERVER on AF_UNIX /data/local/tmp/temp_su.sock
+    (chmod 0666); `su` / `su -c` = CLIENT connecting to it. Same file, run twice.
+  - Staging: write /data/local/tmp/.su.new.<pid> (root-owned 0755) -> chcon ->
+    atomic rename over /data/local/tmp/su. Daemon fork+execl(/system/bin/sh).
+  - MINIMAL uses ONE binary for BOTH roles (daemon NOT dropped). Decision:
+    build -DMINIMAL_INSTALL; ignore /apex/com.android.virt/bin entirely.
+  - Neither mode survives reboot (tmpfs RAM / daemon dies).
+    This is expected runtime-root, not a permanent unlock.
+  - dm-verity: tmpfs overlay over /apex is RAM-only, cannot trip dm-verity
+    (no red-state). /data/local/tmp/su is on f2fs (not verity-protected).
+
 ================================================================================
  5) Files UNCHANGED (byte-identical to upstream)
 ================================================================================
