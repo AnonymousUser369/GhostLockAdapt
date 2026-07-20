@@ -6,7 +6,7 @@ device codename `air`, build `AP3A.240905.015.A2` (Android 15), kernel **5.15.18
 This is a fork of the public CyberMeowfia/IonStack `CVE-2026-43499` exploit (which
 targets 6.x GKI Pixels). The `air` target is added and tuned for 5.15.180.
 
-Work mostly done by AI since its out of my league. 😅
+Work mostly done by AI since it is out of my league. 😅
 
 > **Status: does NOT achieve root on 5.15.180.** All setup/infrastructure works;
 > the core kernel stack-corruption primitive is incompatible with the 5.15 stack
@@ -42,7 +42,7 @@ kernel page works on 5.15.180:
 | 6. Drop `su` | Write `su` to `/data/local/tmp`. | works (no root to use it) |
 
 Confirmed on-device (see `RUNLOGS.md`): `slide-kaslr-known base=ffffffc008000000 slide=0`,
-and `bootid_data=ffffff8002dc5a19` (correct `random_table[boot_id].data` offset).
+and `boot_id_data=ffffff8002dc5a19` (correct `random_table[boot_id].data` offset).
 
 ## What is broken
 
@@ -51,28 +51,33 @@ the GhostLock futex UAF) to point at the fake page from Stage 2. On 5.15.180 thi
 never lands. From disassembling `kernel_5-15-180-vmlinux.elf` (no DWARF/BTF, use
 `llvm-objdump`):
 
-- `do_select` is inlined into `core_sys_select`.
-- the dangling `rt_mutex_waiter` pointer sits at `core_sys_select sp + 0xc0`.
-- the `fd_set` bitmaps sit at `sp + 0x100` — **64 bytes too high** to reach it.
+- `do_select` is a **separate function** (`0xffffffc00857cbf0`), called by `core_sys_select`
+  at `0x57c6bc` — NOT inlined.
+- The `fd_set` bitmap is copied into `core_sys_select`'s kernel-stack frame at `sp+0x100`.
+- The dangling `rt_mutex_waiter` pointer is frozen in the **futex** frame
+  (`futex_lock_pi`, waiter at its `sp+0x78`) — a *different, concurrent* call chain.
+- The pselect route only works when the `fd_set` buffer's **address coincides** with
+  the dangling waiter pointer's address on the kernel stack. This is a *frame-layout
+  OFFSET COINCIDENCE*, not a total call-chain depth issue: re-tracing downward
+  call depths shows both pselect (`0x1cec0`) and io_uring (`0x1cd60`) far exceed
+  the 856B (0x358) threshold, so depth is irrelevant. 6.x lays frames out so
+  `fd_set` lands ON the waiter offset; 5.15.180 does not.
 
-The `fd_set` grows away from the waiter and can never overlap. Same blocker oppo-ghostlock
-hit on 5.10 (identical frame sizes, marked NOT VIABLE). The 6.x ports only work because
-6.x reshuffled `core_sys_select` so `fd_set` lands on the waiter.
-
-On-device symptom (in `RUNLOGS.md`): every attempt logs the literal `boot_id` UUID
-(corruption missed), `sched_ok=0`, then `pipe physrw read_ok=0 write_ok=0` → no root.
-KASLR is fine because it is known from symbols.
+This is the same blocker oppo-ghostlock hit on 5.10 ("waiter 120 bytes below
+fd_set, fdset cannot reach it", marked NOT VIABLE). The on-device symptom (in
+`RUNLOGS.md`): every attempt logs the literal `boot_id` UUID (corruption missed),
+`sched_ok=0`, then `pipe physrw read_ok=0 write_ok=0` → no root. KASLR is fine
+because it is known from symbols.
 
 The tokay target's alternate TCP route (`do_tcp_fake_lock_route`, `TCP_ZEROCOPY_RECEIVE`)
 was also analyzed: on 5.15 its `zc` stack buffer is `0xe0` bytes from the frozen waiter —
-same structural miss.
+same structural miss (different offset).
 
 ## Analysis
 
 Full root-cause, frame evidence, exploit architecture, and the Path A/B investigation
 are in `ANALYSIS.md`. In-file source changes are in `MODIFICATIONS.md`. Merged on-device
 run logs (exlog.txt … exlog6.txt) are in `RUNLOGS.md`.
-
 
 ## External resources (provided separately)
 
@@ -93,9 +98,10 @@ in this one. Add links here:
 - `CVE-2026-43499/exploit/Makefile` — build.
 - `CVE-2026-43499/poc/poc.c` — minimal PoC.
 - `Target/kernel_5-15-180-vmlinux.elf` — 5.15 GKI vmlinux (frame analysis, no DWARF/BTF).
-- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets for 5.15.180.
+  Lives in the GitHub repo clone (`../ghostlock_repo/Target/` locally); not stored in this fork.
+- `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets (in GitHub repo `Target/`).
 - `Target/kernel_5-15-180.config` — extracted GKI build config (CONFIG_IKCONFIG) for CVE reachability filtering.
-- `Target/vmlinux-6.1.elf` — 6.1 GKI ELF; used to confirm the `do_select` inlining
+- `Target/vmlinux-6.1.elf` — 6.1 GKI ELF; used to confirm the `do_select` frame
   difference vs 5.15.
 - `ANALYSIS.md`, `MODIFICATIONS.md`, `RUNLOGS.md` — this fork's notes.
 

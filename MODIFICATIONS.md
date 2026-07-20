@@ -1,17 +1,14 @@
 # In-File Modifications — GhostLock (CVE-2026-43499) port to POCO air (5.15.180 GKI)
 
 This documents every change made to the exploit source for the `air` target.
-Baseline = upstream CyberMeowfia/IonStack `CVE-2026-43499` (6.x GKI ports) in
-`CyberMeowfia-main/IonStack/`. All paths below are under
-`CVE-2026-43499/exploit/src/`.
+Baseline = upstream CyberMeowfia/IonStack `CVE-2026-43499` (6.x GKI ports).
+All paths below are under `CVE-2026-43499/exploit/src/`.
 
 NOTE: the exploit does NOT achieve root on 5.15.180. These modifications are
-correct ports; the remaining blocker is the kernel stack-frame incompatibility,
-not a code bug. The merged run logs are in RUNLOGS.md.
+correct ports; the remaining blocker is the kernel stack-frame incompatibility
+(documented in ANALYSIS.md), not a code bug. The merged run logs are in RUNLOGS.md.
 
-================================================================================
-1) targets/air-AP3A.240905.015.A2/target.h   [NEW FILE — whole target added]
-================================================================================
+## 1) targets/air-AP3A.240905.015.A2/target.h   [NEW FILE — whole target added]
 New per-target config for POCO air. Key values (all verified against the device
 kallsyms / on-device runs):
 
@@ -31,60 +28,52 @@ kallsyms / on-device runs):
     (kernel_5-15-180-symbols.txt): init_task, selinux_state, configfs_read_iter,
     anon_pipe_buf_ops, kmalloc_caches, ashmem_*, copy_splice_read, etc.
 
-
-================================================================================
-2) common.h   [MODIFIED]
-================================================================================
+## 2) common.h   [MODIFIED]
 a) Version-sensitive kmalloc/MM constants wrapped in #ifndef so 5.15 can override
    them (they default to 6.x values in the upstream file):
-     + #ifndef MM_STRUCT_SZ        ... #endif
-     + #ifndef KMALLOC_SHIFT_HIGH  ... #endif
-     + #ifndef KMALLOC_BUCKETS     ... #endif
-     + #ifndef KMALLOC_NORMAL_TYPE ... #endif
-     + #ifndef KMALLOC_CGROUP_TYPE ... #endif
-     + #ifndef KMALLOC_PIPE_INDEX  ... #endif
-     + #ifndef KMALLOC_CACHE_TYPES ... #endif
-   (air target.h then #defines KMALLOC_SHIFT_HIGH=22, KMALLOC_CGROUP_TYPE=1,
-    KMALLOC_CACHE_TYPES=2, etc.)
+      + #ifndef MM_STRUCT_SZ        ... #endif
+      + #ifndef KMALLOC_SHIFT_HIGH  ... #endif
+      + #ifndef KMALLOC_BUCKETS     ... #endif
+      + #ifndef KMALLOC_NORMAL_TYPE ... #endif
+      + #ifndef KMALLOC_CGROUP_TYPE ... #endif
+      + #ifndef KMALLOC_PIPE_INDEX  ... #endif
+    (air target.h then #defines KMALLOC_SHIFT_HIGH=22, KMALLOC_CGROUP_TYPE=1,
+     KMALLOC_CACHE_TYPES=2, etc.)
 
 b) SLIDE_RANDOM_BOOT_ID_DATA changed from a compile-time alias to a runtime var
    (set per-target, hardcoded in slide.c):
-     - #define SLIDE_RANDOM_BOOT_ID_DATA \
-     -     P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE)
-     + extern uintptr_t slide_random_boot_id_data;
-     + #define SLIDE_RANDOM_BOOT_ID_DATA slide_random_boot_id_data
+      - #define SLIDE_RANDOM_BOOT_ID_DATA \
+      -     P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE)
+      + extern uintptr_t slide_random_boot_id_data;
+      + #define SLIDE_RANDOM_BOOT_ID_DATA slide_random_boot_id_data
 
-================================================================================
- 3) slide.c   [MODIFIED]
-================================================================================
+## 3) slide.c   [MODIFIED]
 a) SLIDE_MAX_ATTEMPTS 20 -> 8 (user request).
-     - #define SLIDE_MAX_ATTEMPTS 20
-     + #define SLIDE_MAX_ATTEMPTS 8
+      - #define SLIDE_MAX_ATTEMPTS 20
+      + #define SLIDE_MAX_ATTEMPTS 8
 
 b) Hardcoded boot_id .data link offset (no runtime random_table scan). Added a
    file-scope variable + comment block (lines ~405-418):
-     + uintptr_t slide_random_boot_id_data =
-     +     P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE);
-   (value comes from SLIDE_RANDOM_BOOT_ID_DATA_OFF=0x02dc5a19; replaces the
-    earlier runtime resolve_boot_id_data() scan that caused "physrw page not
-    ready" in the SLIDE child.)
+      + uintptr_t slide_random_boot_id_data =
+      +     P0_DATA_ALIAS_CONST(SLIDE_RANDOM_BOOT_ID_DATA_IMAGE);
+    (value comes from SLIDE_RANDOM_BOOT_ID_DATA_OFF=0x02dc5a19; replaces the
+     earlier runtime resolve_boot_id_data() scan that caused "physrw page not
+     ready" in the SLIDE child.)
 
 c) SLIDE_KERNEL_BASE_KNOWN short-circuit in slide_leak_kernel_base() (lines ~469-478):
-     + #ifdef SLIDE_KERNEL_BASE_KNOWN
-     +   kaslr_base = KIMAGE_TEXT_BASE;
-     +   kaslr_slide = 0;
-     +   kaslr_done = 1;
-     +   pr_success("slide-kaslr-known pid=%d base=... slide=0\n", ...);
-     +   return 1;
-     + #else
-     ... (original boot_id self-leak path) ...
-     + #endif
-   With this, KASLR base is taken from symbols (slide=0) and the exploit never
-   hard-fails on the boot_id leak.
+      + #ifdef SLIDE_KERNEL_BASE_KNOWN
+      +   kaslr_base = KIMAGE_TEXT_BASE;
+      +   kaslr_slide = 0;
+      +   kaslr_done = 1;
+      +   pr_success("slide-kaslr-known pid=%d base=... slide=0\n", ...);
+      +   return 1;
+      + #else
+      +   ... (original boot_id self-leak path) ...
+      + #endif
+    With this, KASLR base is taken from symbols (slide=0) and the exploit never
+    hard-fails on the boot_id leak.
 
-================================================================================
- 4) preload.c   [MODIFIED — MINIMAL_INSTALL guards]
-================================================================================
+## 4) preload.c   [MODIFIED — MINIMAL_INSTALL guards]
 Wrapped all risky post-exploit behavior behind #ifndef MINIMAL_INSTALL so a
 minimal build only touches /data/local/tmp. Changes:
   - Added #ifndef MINIMAL_INSTALL around the /apex su drop:
@@ -117,60 +106,57 @@ su_daemon mechanics (verified in SU_DAEMON_NOTES.md):
   - dm-verity: tmpfs overlay over /apex is RAM-only, cannot trip dm-verity
     (no red-state). /data/local/tmp/su is on f2fs (not verity-protected).
 
-================================================================================
- 5) Files UNCHANGED (byte-identical to upstream)
-================================================================================
+## 5) Files UNCHANGED (byte-identical to upstream)
 fops.c, main.c, pipe.c, root.c, offset.h, su_blob.S, su_daemon.c,
-wallpaper_blob.S, kernelsnitch/.  The core exploitation engine (physrw primitive,
+wallpaper_blob.S, kernelsnitch/. The core exploitation engine (physrw primitive,
 futex PI race, cred/SELinux overwrite) is untouched — only data (offsets) and
 build configuration differ.
 
 NOTE: util.c is NO LONGER unchanged — see section 8 (perf KASLR leak ported).
 
-================================================================================
- 6) Build artifact
-================================================================================
+## 6) Build artifact
 build/air-AP3A.240905.015.A2/bin/preload.so
   - last good build sha (before context-loss rebuild): 1532b7faf7fb8381196c96e831844ac91a3ee47e374a6a948594d27b01bce919
   - rebuilt sha (this session, after boot_id fix): 6a71aa6789ff695fe2cfd2447add11b903f3bedf2ee51fdf7f91a03e6d632c72
   Built with android-ndk-r29 (clang-21); NDK ld.lld symlinked to system /usr/bin/ld.lld.
 
-================================================================================
- 7) Known limitation (not a code defect)
-================================================================================
+## 7) Known limitation (not a code defect)
 pselect fd_set stack-overwrite cannot redirect the dangling rt_mutex_waiter on
-5.15.180: waiter at core_sys_select sp+0xc0, fd_set at sp+0x100 (64B too high).
-The merged run logs are in RUNLOGS.md.
+5.15.180: the waiter is frozen in the FUTEX frame (futex_lock_pi sp+0x78),
+while the fd_set is copied into core_sys_select's frame at sp+0x100. The two
+live in different, concurrent call chains; the route only works when the fd_set
+buffer's address coincides with the frozen waiter pointer's address (a frame-layout
+OFFSET COINCIDENCE). 6.x aligns them; 5.15.180 does not. The merged
+run logs are in RUNLOGS.md. (The tokay alternate TCP route was also analyzed
+and misses by the same structural offset gap on 5.15.)
 
-================================================================================
- 8) util.c + main.c + common.h   [MODIFIED — perf KASLR leak ported]
-================================================================================
+## 8) util.c + main.c + common.h   [MODIFIED — perf KASLR leak ported]
 Ported `perf_leak_text_base()` from the lamu/PD targets (other research fork).
 It is an ALTERNATE KASLR / text-base leak, NOT an alternate for the root stage.
 Our air fork already succeeds at KASLR via the pselect slide leak
 (`slide_leak_kernel_base`), so this is redundancy, not a fix for the 5.15
-do_select inlining blocker (that blocker is the stack-cover path, unrelated to KASLR).
+stack-overwrite blocker.
 
   util.c:
     - + #include <linux/perf_event.h>
     - + perf_leak_text_base()  (samples kernel IPs via PERF_COUNT_SW_CPU_CLOCK,
-      takes lowest kernel-text IP rounded to 2 MiB, derives _text via
-      P0_KERNEL_PHYS_DELTA; bails if /proc/sys/kernel/perf_event_paranoid > 1)
+        takes lowest kernel-text IP rounded to 2 MiB, derives _text via
+        P0_KERNEL_PHYS_DELTA; bails if /proc/sys/kernel/perf_event_paranoid > 1)
   common.h:
     - + uint64_t perf_leak_text_base(void);   (line ~424)
   main.c (KASLR step, ~line 182):
     - try perf first, fall back to slide:
-        uint64_t text_base = perf_leak_text_base();
-        if (text_base) { kaslr_base = text_base; kaslr_done = 1; (perf) }
-        else if (!slide_leak_kernel_base()) { fail; }
+          uint64_t text_base = perf_leak_text_base();
+          if (text_base) { kaslr_base = text_base; kaslr_done = 1; (perf) }
+          else if (!slide_leak_kernel_base()) { fail; }
 
-Notes:
-  - perf needs perf_event_paranoid <= 1; on the air device SELinux may block
-    perf_event_open (paranoid > 1) -> silently falls back to the pselect slide
-    leak. No regression either way.
-  - Uses our existing P0_KERNEL_PHYS_DELTA (which is 0 for GKI, so it yields
-    the virtual _text directly). No new target.h constants required.
-  - Technique reference: reference-targets/adaptation-knowledge.md (section 4 + perf notes);
-    source: pubglite55/oppo-ghostlock lamu/PD targets.
-  - Built OK: preload.so sha 86317ae95b6acbe63bc3f0aee5ebc0daa822a6e9e3250f3ea3f3970c574e9d20
-    (make NDK_ROOT=/mnt/Data/AI_Workspace/android-ndk-r29).
+  Notes:
+    - perf needs perf_event_paranoid <= 1; if SELinux blocks perf_event_open
+      (paranoid > 1) it silently falls back to the pselect slide leak.
+      No regression either way. (On-device: perf leak validated, slide=0x114a200000.)
+    - Uses our existing P0_KERNEL_PHYS_DELTA (which is 0 for GKI, so it yields
+      the virtual _text directly). No new target.h constants required.
+    - Technique reference: reference-targets/adaptation-knowledge.md (section 4 + perf
+      notes); source: pubglite55/oppo-ghostlock lamu/PD targets.
+    - Built OK: preload.so sha 86317ae95b6acbe63bc3f0aee5ebc0daa822a6e9e3250f3ea3f3970c574e9d20
+      (make NDK_ROOT=/mnt/Data/AI_Workspace/android-ndk-r29).
