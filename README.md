@@ -3,7 +3,7 @@
 Privilege-escalation exploit port for the **POCO air** (a.k.a. Redmi 13C 5G / POCO M6 5G),
 device codename `air`, build `AP3A.240905.015.A2` (Android 15), kernel **5.15.180-android13 GKI**.
 
-This is a fork of the public CyberMeowfia/IonStack `CVE-2026-43499` exploit (which
+This is a fork of the public [CyberMeowfia/IonStack](https://github.com/NebuSec/CyberMeowfia) `CVE-2026-43499` exploit (which
 targets 6.x GKI Pixels). The `air` target is added and tuned for 5.15.180.
 
 Work mostly done by AI since it is out of my league. 😅
@@ -84,7 +84,7 @@ run logs (exlog.txt … exlog6.txt) are in `RUNLOGS.md`.
 The following were used during this port but live in other people's repositories, not
 in this one. Add links here:
 
-- CyberMeowfia/IonStack `CVE-2026-43499` (upstream, 6.x targets) —
+- CyberMeowfia/IonStack `CVE-2026-43499` (upstream, 6.x targets) — https://github.com/NebuSec/CyberMeowfia
 - oppo-ghostlock (5.10 analysis, BLOCKER 1 proof) — https://github.com/pubglite55/oppo-ghostlock
 - 6.6 GKI ports (tokay/fuxi/lamu) referenced for `rt_mutex_waiter` offsets and the
   alternate TCP route — https://github.com/NebuSec/CyberMeowfia/pull/42 & https://github.com/NebuSec/CyberMeowfia/pull/36
