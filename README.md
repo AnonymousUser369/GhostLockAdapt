@@ -98,7 +98,6 @@ in this one. Add links here:
 - `CVE-2026-43499/exploit/Makefile` — build.
 - `CVE-2026-43499/poc/poc.c` — minimal PoC.
 - `Target/kernel_5-15-180-vmlinux.elf` — 5.15 GKI vmlinux (frame analysis, no DWARF/BTF).
-  Lives in the GitHub repo clone (`../ghostlock_repo/Target/` locally); not stored in this fork.
 - `Target/kernel_5-15-180-symbols.txt` — kallsyms offsets (in GitHub repo `Target/`).
 - `Target/kernel_5-15-180.config` — extracted GKI build config (CONFIG_IKCONFIG) for CVE reachability filtering.
 - `Target/vmlinux-6.1.elf` — 6.1 GKI ELF; used to confirm the `do_select` frame
