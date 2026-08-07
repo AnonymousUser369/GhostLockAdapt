@@ -1,0 +1,17 @@
+[main] g_iov_idx=0 (override with IOV_IDX=k)
+[kaslr] perf text-base=ffffffd493e00000 min_kip=ffffffd493ea20a0 samples=21
+[kaslr] base=0xffffffd493e00000 slide=0x148be00000
+  init_task   = 0xffffffd49ea43640
+  selinux_state = 0xffffffd49eba9d78 (enforcing @ +0)
+  fake_lock   = 0xffffffd49ebca880 (uid_lock+0x200, ZEROED BSS rt_mutex)
+  fake_lock2  = 0xffffffd49ebca980 (uid_lock+0x300, ZEROED BSS rt_mutex)
+[Y] tid=15220
+[X] tid=15221
+[main] topology ready; FUTEX_CMP_REQUEUE_PI(cond) -> cycle
+[main] CMP_REQUEUE_PI returned -35 (Resource deadlock would occur)
+[main] -EDEADLK: full chainwalk caught PI cycle
+[Y] PHASE1 spray: settle ghost into fake_lock->waiters (task@iov3-7, parent@0-2)
+[Z] tid=15222
+[Z] FUTEX_LOCK_PI(L2): walk into pi_blocked_on
+[do_2] Z blocked on L2 — chain walk survived
+[phase1] sched_setscheduler(Y) -> rb_erase NULL write to root (settle)
