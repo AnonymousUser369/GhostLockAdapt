@@ -1,0 +1,99 @@
+ffffffc00817c6d0 <get_pid_task>:
+ffffffc00817c6d0: d503233f     	paciasp
+ffffffc00817c6d4: d100c3ff     	sub	sp, sp, #0x30
+ffffffc00817c6d8: f800865e     	str	x30, [x18], #0x8
+ffffffc00817c6dc: a9017bfd     	stp	x29, x30, [sp, #0x10]
+ffffffc00817c6e0: 910043fd     	add	x29, sp, #0x10
+ffffffc00817c6e4: f90013f3     	str	x19, [sp, #0x20]
+ffffffc00817c6e8: aa0003e8     	mov	x8, x0
+ffffffc00817c6ec: d5384100     	mrs	x0, SP_EL0
+ffffffc00817c6f0: 91113009     	add	x9, x0, #0x44c
+ffffffc00817c6f4: 88dffd2a     	ldar	w10, [x9]
+ffffffc00817c6f8: 1100054a     	add	w10, w10, #0x1
+ffffffc00817c6fc: b9044c0a     	str	w10, [x0, #0x44c]
+ffffffc00817c700: b4000188     	cbz	x8, 0xffffffc00817c730 <get_pid_task+0x60>
+ffffffc00817c704: 7100143f     	cmp	w1, #0x5
+ffffffc00817c708: 540006c2     	b.hs	0xffffffc00817c7e0 <get_pid_task+0x110>
+ffffffc00817c70c: 2a0103ea     	mov	w10, w1
+ffffffc00817c710: 8b0a0d08     	add	x8, x8, x10, lsl #3
+ffffffc00817c714: 91004108     	add	x8, x8, #0x10
+ffffffc00817c718: c8dffd08     	ldar	x8, [x8]
+ffffffc00817c71c: cb0a110a     	sub	x10, x8, x10, lsl #4
+ffffffc00817c720: d1192153     	sub	x19, x10, #0x648
+ffffffc00817c724: f100011f     	cmp	x8, #0x0
+ffffffc00817c728: fa401a64     	ccmp	x19, #0x0, #0x4, ne
+ffffffc00817c72c: 54000061     	b.ne	0xffffffc00817c738 <get_pid_task+0x68>
+ffffffc00817c730: aa1f03f3     	mov	x19, xzr
+ffffffc00817c734: 1400000a     	b	0xffffffc00817c75c <get_pid_task+0x8c>
+ffffffc00817c738: 9100e26a     	add	x10, x19, #0x38
+ffffffc00817c73c: 1400002a     	b	0xffffffc00817c7e4 <get_pid_task+0x114>
+ffffffc00817c740: 14000029     	b	0xffffffc00817c7e4 <get_pid_task+0x114>
+ffffffc00817c744: 52800028     	mov	w8, #0x1        // =1
+ffffffc00817c748: b8280148     	ldadd	w8, w8, [x10]
+ffffffc00817c74c: 340005a8     	cbz	w8, 0xffffffc00817c800 <get_pid_task+0x130>
+ffffffc00817c750: 1100050a     	add	w10, w8, #0x1
+ffffffc00817c754: 2a080148     	orr	w8, w10, w8
+ffffffc00817c758: 37f80228     	tbnz	w8, #0x1f, 0xffffffc00817c79c <get_pid_task+0xcc>
+ffffffc00817c75c: 88dffd28     	ldar	w8, [x9]
+ffffffc00817c760: 71000508     	subs	w8, w8, #0x1
+ffffffc00817c764: b9044c08     	str	w8, [x0, #0x44c]
+ffffffc00817c768: 54000081     	b.ne	0xffffffc00817c778 <get_pid_task+0xa8>
+ffffffc00817c76c: 91114008     	add	x8, x0, #0x450
+ffffffc00817c770: 88dffd08     	ldar	w8, [x8]
+ffffffc00817c774: 35000108     	cbnz	w8, 0xffffffc00817c794 <get_pid_task+0xc4>
+ffffffc00817c778: a9417bfd     	ldp	x29, x30, [sp, #0x10]
+ffffffc00817c77c: aa1303e0     	mov	x0, x19
+ffffffc00817c780: f94013f3     	ldr	x19, [sp, #0x20]
+ffffffc00817c784: f85f8e5e     	ldr	x30, [x18, #-0x8]!
+ffffffc00817c788: 9100c3ff     	add	sp, sp, #0x30
+ffffffc00817c78c: d50323bf     	autiasp
+ffffffc00817c790: d65f03c0     	ret
+ffffffc00817c794: 94033063     	bl	0xffffffc008248920 <rcu_read_unlock_special>
+ffffffc00817c798: 17fffff8     	b	0xffffffc00817c778 <get_pid_task+0xa8>
+ffffffc00817c79c: 52b8000a     	mov	w10, #-0x40000000 // =-1073741824
+ffffffc00817c7a0: b0014c88     	adrp	x8, 0xffffffc00ab0d000 <neigh_sysctl_template+0x1a0>
+ffffffc00817c7a4: b9003a6a     	str	w10, [x19, #0x38]
+ffffffc00817c7a8: 396b310a     	ldrb	w10, [x8, #0xacc]
+ffffffc00817c7ac: 3707fd8a     	tbnz	w10, #0x0, 0xffffffc00817c75c <get_pid_task+0x8c>
+ffffffc00817c7b0: 5280002a     	mov	w10, #0x1       // =1
+ffffffc00817c7b4: f9000fa0     	str	x0, [x29, #0x18]
+ffffffc00817c7b8: f90007e9     	str	x9, [sp, #0x8]
+ffffffc00817c7bc: 392b310a     	strb	w10, [x8, #0xacc]
+ffffffc00817c7c0: d000e788     	adrp	x8, 0xffffffc009e6e000 <max_tt_usecs+0x5d99>
+ffffffc00817c7c4: 91261508     	add	x8, x8, #0x985
+ffffffc00817c7c8: aa0803e0     	mov	x0, x8
+ffffffc00817c7cc: 97feed80     	bl	0xffffffc008137dcc <__warn_printk>
+ffffffc00817c7d0: f94007e9     	ldr	x9, [sp, #0x8]
+ffffffc00817c7d4: f9400fa0     	ldr	x0, [x29, #0x18]
+ffffffc00817c7d8: d4210000     	brk	#0x800
+ffffffc00817c7dc: 17ffffe0     	b	0xffffffc00817c75c <get_pid_task+0x8c>
+ffffffc00817c7e0: d42aa240     	brk	#0x5512
+ffffffc00817c7e4: d503249f     	bti	j
+ffffffc00817c7e8: f9800151     	prfm	pstl1strm, [x10]
+ffffffc00817c7ec: 885f7d48     	ldxr	w8, [x10]
+ffffffc00817c7f0: 1100050b     	add	w11, w8, #0x1
+ffffffc00817c7f4: 880c7d4b     	stxr	w12, w11, [x10]
+ffffffc00817c7f8: 35ffffac     	cbnz	w12, 0xffffffc00817c7ec <get_pid_task+0x11c>
+ffffffc00817c7fc: 35fffaa8     	cbnz	w8, 0xffffffc00817c750 <get_pid_task+0x80>
+ffffffc00817c800: 52b8000a     	mov	w10, #-0x40000000 // =-1073741824
+ffffffc00817c804: b0014c88     	adrp	x8, 0xffffffc00ab0d000 <neigh_sysctl_template+0x1a0>
+ffffffc00817c808: b9003a6a     	str	w10, [x19, #0x38]
+ffffffc00817c80c: 396b350a     	ldrb	w10, [x8, #0xacd]
+ffffffc00817c810: 3707fa6a     	tbnz	w10, #0x0, 0xffffffc00817c75c <get_pid_task+0x8c>
+ffffffc00817c814: 5280002a     	mov	w10, #0x1       // =1
+ffffffc00817c818: f9000fa0     	str	x0, [x29, #0x18]
+ffffffc00817c81c: f90007e9     	str	x9, [sp, #0x8]
+ffffffc00817c820: 392b350a     	strb	w10, [x8, #0xacd]
+ffffffc00817c824: b000e608     	adrp	x8, 0xffffffc009e3d000 <hci_reset_dev.hw_err+0xc0bc>
+ffffffc00817c828: 910e1908     	add	x8, x8, #0x386
+ffffffc00817c82c: aa0803e0     	mov	x0, x8
+ffffffc00817c830: 97feed67     	bl	0xffffffc008137dcc <__warn_printk>
+ffffffc00817c834: f94007e9     	ldr	x9, [sp, #0x8]
+ffffffc00817c838: f9400fa0     	ldr	x0, [x29, #0x18]
+ffffffc00817c83c: d4210000     	brk	#0x800
+ffffffc00817c840: 17ffffc7     	b	0xffffffc00817c75c <get_pid_task+0x8c>
+ffffffc00817c844: b8bfc12a     	ldapr	w10, [x9]
+ffffffc00817c848: f8bfc108     	ldapr	x8, [x8]
+ffffffc00817c84c: b8bfc128     	ldapr	w8, [x9]
+ffffffc00817c850: b8bfc108     	ldapr	w8, [x8]
+

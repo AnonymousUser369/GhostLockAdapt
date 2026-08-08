@@ -1,0 +1,19 @@
+ffffffc00817c4d8 <pid_task>:
+ffffffc00817c4d8: d503245f     	bti	c
+ffffffc00817c4dc: b40001a0     	cbz	x0, 0xffffffc00817c510 <pid_task+0x38>
+ffffffc00817c4e0: 7100143f     	cmp	w1, #0x5
+ffffffc00817c4e4: 54000182     	b.hs	0xffffffc00817c514 <pid_task+0x3c>
+ffffffc00817c4e8: d503233f     	paciasp
+ffffffc00817c4ec: 2a0103e8     	mov	w8, w1
+ffffffc00817c4f0: 8b080c09     	add	x9, x0, x8, lsl #3
+ffffffc00817c4f4: 91004129     	add	x9, x9, #0x10
+ffffffc00817c4f8: c8dffd29     	ldar	x9, [x9]
+ffffffc00817c4fc: cb081128     	sub	x8, x9, x8, lsl #4
+ffffffc00817c500: d1192108     	sub	x8, x8, #0x648
+ffffffc00817c504: f100013f     	cmp	x9, #0x0
+ffffffc00817c508: 9a8803e0     	csel	x0, xzr, x8, eq
+ffffffc00817c50c: d50323bf     	autiasp
+ffffffc00817c510: d65f03c0     	ret
+ffffffc00817c514: d42aa240     	brk	#0x5512
+ffffffc00817c518: f8bfc129     	ldapr	x9, [x9]
+

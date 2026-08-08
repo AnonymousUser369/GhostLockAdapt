@@ -1,0 +1,370 @@
+
+/mnt/Data/AI_Workspace/ghostlock_repo/Target/kernel_5-15-180-vmlinux.elf:	file format elf64-littleaarch64
+
+Disassembly of section .kernel:
+
+ffffffc00818b258 <commit_creds>:
+ffffffc00818b258: d503233f     	paciasp
+ffffffc00818b25c: f800865e     	str	x30, [x18], #0x8
+ffffffc00818b260: a9bd7bfd     	stp	x29, x30, [sp, #-0x30]!
+ffffffc00818b264: a90157f6     	stp	x22, x21, [sp, #0x10]
+ffffffc00818b268: 910003fd     	mov	x29, sp
+ffffffc00818b26c: a9024ff4     	stp	x20, x19, [sp, #0x20]
+ffffffc00818b270: d5384114     	mrs	x20, SP_EL0
+ffffffc00818b274: f943ca93     	ldr	x19, [x20, #0x790]
+ffffffc00818b278: f943ce88     	ldr	x8, [x20, #0x798]
+ffffffc00818b27c: eb13011f     	cmp	x8, x19
+ffffffc00818b280: 54002321     	b.ne	0xffffffc00818b6e4 <commit_creds+0x48c>
+ffffffc00818b284: aa0003f5     	mov	x21, x0
+ffffffc00818b288: 88dffc08     	ldar	w8, [x0]
+ffffffc00818b28c: 7100011f     	cmp	w8, #0x0
+ffffffc00818b290: 540022cd     	b.le	0xffffffc00818b6e8 <commit_creds+0x490>
+ffffffc00818b294: b40000d5     	cbz	x21, 0xffffffc00818b2ac <commit_creds+0x54>
+ffffffc00818b298: b900a2bf     	str	wzr, [x21, #0xa0]
+ffffffc00818b29c: 140000f7     	b	0xffffffc00818b678 <commit_creds+0x420>
+ffffffc00818b2a0: 140000f6     	b	0xffffffc00818b678 <commit_creds+0x420>
+ffffffc00818b2a4: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818b2a8: b82802bf     	stadd	w8, [x21]
+ffffffc00818b2ac: b9401668     	ldr	w8, [x19, #0x14]
+ffffffc00818b2b0: b94016a9     	ldr	w9, [x21, #0x14]
+ffffffc00818b2b4: 6b09011f     	cmp	w8, w9
+ffffffc00818b2b8: 540004c1     	b.ne	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b2bc: b9401a69     	ldr	w9, [x19, #0x18]
+ffffffc00818b2c0: b9401aaa     	ldr	w10, [x21, #0x18]
+ffffffc00818b2c4: 6b0a013f     	cmp	w9, w10
+ffffffc00818b2c8: 54000441     	b.ne	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b2cc: b9401e69     	ldr	w9, [x19, #0x1c]
+ffffffc00818b2d0: b9401eaa     	ldr	w10, [x21, #0x1c]
+ffffffc00818b2d4: 6b0a013f     	cmp	w9, w10
+ffffffc00818b2d8: 540003c1     	b.ne	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b2dc: b9402269     	ldr	w9, [x19, #0x20]
+ffffffc00818b2e0: b94022aa     	ldr	w10, [x21, #0x20]
+ffffffc00818b2e4: 6b0a013f     	cmp	w9, w10
+ffffffc00818b2e8: 54000341     	b.ne	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b2ec: f9404669     	ldr	x9, [x19, #0x88]
+ffffffc00818b2f0: f94046ab     	ldr	x11, [x21, #0x88]
+ffffffc00818b2f4: eb0b013f     	cmp	x9, x11
+ffffffc00818b2f8: 54000200     	b.eq	0xffffffc00818b338 <commit_creds+0xe0>
+ffffffc00818b2fc: f0015a0a     	adrp	x10, 0xffffffc00acce000 <vsock_proto+0x90>
+ffffffc00818b300: 9106414a     	add	x10, x10, #0x190
+ffffffc00818b304: eb0a017f     	cmp	x11, x10
+ffffffc00818b308: 540000a1     	b.ne	0xffffffc00818b31c <commit_creds+0xc4>
+ffffffc00818b30c: 14000011     	b	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b310: aa0c03eb     	mov	x11, x12
+ffffffc00818b314: eb0a019f     	cmp	x12, x10
+ffffffc00818b318: 540001c0     	b.eq	0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b31c: f9406d6c     	ldr	x12, [x11, #0xd8]
+ffffffc00818b320: eb0c013f     	cmp	x9, x12
+ffffffc00818b324: 54ffff61     	b.ne	0xffffffc00818b310 <commit_creds+0xb8>
+ffffffc00818b328: b940e56b     	ldr	w11, [x11, #0xe4]
+ffffffc00818b32c: 6b08017f     	cmp	w11, w8
+ffffffc00818b330: 54ffff01     	b.ne	0xffffffc00818b310 <commit_creds+0xb8>
+ffffffc00818b334: 14000038     	b	0xffffffc00818b414 <commit_creds+0x1bc>
+ffffffc00818b338: f9401aa8     	ldr	x8, [x21, #0x30]
+ffffffc00818b33c: f9401a69     	ldr	x9, [x19, #0x30]
+ffffffc00818b340: 8a290108     	bic	x8, x8, x9
+ffffffc00818b344: d360fd09     	lsr	x9, x8, #32
+ffffffc00818b348: b5000049     	cbnz	x9, 0xffffffc00818b350 <commit_creds+0xf8>
+ffffffc00818b34c: 34000648     	cbz	w8, 0xffffffc00818b414 <commit_creds+0x1bc>
+ffffffc00818b350: f9429288     	ldr	x8, [x20, #0x520]
+ffffffc00818b354: b40003c8     	cbz	x8, 0xffffffc00818b3cc <commit_creds+0x174>
+ffffffc00818b358: 90016089     	adrp	x9, 0xffffffc00ad9b000 <chrdevs+0x368>
+ffffffc00818b35c: b944a129     	ldr	w9, [x9, #0x4a0]
+ffffffc00818b360: 71000d3f     	cmp	w9, #0x3
+ffffffc00818b364: 54000322     	b.hs	0xffffffc00818b3c8 <commit_creds+0x170>
+ffffffc00818b368: 910ca108     	add	x8, x8, #0x328
+ffffffc00818b36c: c8dffd01     	ldar	x1, [x8]
+ffffffc00818b370: 927ef42a     	and	x10, x1, #0xfffffffffffffffc
+ffffffc00818b374: aa090142     	orr	x2, x10, x9
+ffffffc00818b378: 14000009     	b	0xffffffc00818b39c <commit_creds+0x144>
+ffffffc00818b37c: 14000008     	b	0xffffffc00818b39c <commit_creds+0x144>
+ffffffc00818b380: aa0803e0     	mov	x0, x8
+ffffffc00818b384: aa0103ea     	mov	x10, x1
+ffffffc00818b388: c8eafd02     	casal	x10, x2, [x8]
+ffffffc00818b38c: aa0a03e0     	mov	x0, x10
+ffffffc00818b390: eb01001f     	cmp	x0, x1
+ffffffc00818b394: 54fffec1     	b.ne	0xffffffc00818b36c <commit_creds+0x114>
+ffffffc00818b398: 1400000d     	b	0xffffffc00818b3cc <commit_creds+0x174>
+ffffffc00818b39c: d503249f     	bti	j
+ffffffc00818b3a0: f9800111     	prfm	pstl1strm, [x8]
+ffffffc00818b3a4: c85f7d00     	ldxr	x0, [x8]
+ffffffc00818b3a8: ca01000a     	eor	x10, x0, x1
+ffffffc00818b3ac: b500008a     	cbnz	x10, 0xffffffc00818b3bc <commit_creds+0x164>
+ffffffc00818b3b0: c80afd02     	stlxr	w10, x2, [x8]
+ffffffc00818b3b4: 35ffff8a     	cbnz	w10, 0xffffffc00818b3a4 <commit_creds+0x14c>
+ffffffc00818b3b8: d5033bbf     	dmb	ish
+ffffffc00818b3bc: eb01001f     	cmp	x0, x1
+ffffffc00818b3c0: 54fffd61     	b.ne	0xffffffc00818b36c <commit_creds+0x114>
+ffffffc00818b3c4: 14000002     	b	0xffffffc00818b3cc <commit_creds+0x174>
+ffffffc00818b3c8: d4210000     	brk	#0x800
+ffffffc00818b3cc: b9057a9f     	str	wzr, [x20, #0x578]
+ffffffc00818b3d0: d5033abf     	dmb	ishst
+ffffffc00818b3d4: b9401ea8     	ldr	w8, [x21, #0x1c]
+ffffffc00818b3d8: b9401e69     	ldr	w9, [x19, #0x1c]
+ffffffc00818b3dc: 6b09011f     	cmp	w8, w9
+ffffffc00818b3e0: 540001a0     	b.eq	0xffffffc00818b414 <commit_creds+0x1bc>
+ffffffc00818b3e4: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b3e8: b4000168     	cbz	x8, 0xffffffc00818b414 <commit_creds+0x1bc>
+ffffffc00818b3ec: 91008116     	add	x22, x8, #0x20
+ffffffc00818b3f0: aa1603e0     	mov	x0, x22
+ffffffc00818b3f4: 9401845c     	bl	0xffffffc0081ec564 <rwsem_write_trylock>
+ffffffc00818b3f8: 36001380     	tbz	w0, #0x0, 0xffffffc00818b668 <commit_creds+0x410>
+ffffffc00818b3fc: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b400: b9401ea9     	ldr	w9, [x21, #0x1c]
+ffffffc00818b404: b9008109     	str	w9, [x8, #0x80]
+ffffffc00818b408: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b40c: 91008100     	add	x0, x8, #0x20
+ffffffc00818b410: 9401802b     	bl	0xffffffc0081eb4bc <up_write>
+ffffffc00818b414: b94022a8     	ldr	w8, [x21, #0x20]
+ffffffc00818b418: b9402269     	ldr	w9, [x19, #0x20]
+ffffffc00818b41c: 6b09011f     	cmp	w8, w9
+ffffffc00818b420: 540001a0     	b.eq	0xffffffc00818b454 <commit_creds+0x1fc>
+ffffffc00818b424: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b428: b4000168     	cbz	x8, 0xffffffc00818b454 <commit_creds+0x1fc>
+ffffffc00818b42c: 91008116     	add	x22, x8, #0x20
+ffffffc00818b430: aa1603e0     	mov	x0, x22
+ffffffc00818b434: 9401844c     	bl	0xffffffc0081ec564 <rwsem_write_trylock>
+ffffffc00818b438: 36001100     	tbz	w0, #0x0, 0xffffffc00818b658 <commit_creds+0x400>
+ffffffc00818b43c: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b440: b94022a9     	ldr	w9, [x21, #0x20]
+ffffffc00818b444: b9008509     	str	w9, [x8, #0x84]
+ffffffc00818b448: f94036a8     	ldr	x8, [x21, #0x68]
+ffffffc00818b44c: 91008100     	add	x0, x8, #0x20
+ffffffc00818b450: 9401801b     	bl	0xffffffc0081eb4bc <up_write>
+ffffffc00818b454: f94042a8     	ldr	x8, [x21, #0x80]
+ffffffc00818b458: f9404269     	ldr	x9, [x19, #0x80]
+ffffffc00818b45c: eb09011f     	cmp	x8, x9
+ffffffc00818b460: 540000a1     	b.ne	0xffffffc00818b474 <commit_creds+0x21c>
+ffffffc00818b464: f94046a8     	ldr	x8, [x21, #0x88]
+ffffffc00818b468: f9404669     	ldr	x9, [x19, #0x88]
+ffffffc00818b46c: eb09011f     	cmp	x8, x9
+ffffffc00818b470: 54000300     	b.eq	0xffffffc00818b4d0 <commit_creds+0x278>
+ffffffc00818b474: f9404aa8     	ldr	x8, [x21, #0x90]
+ffffffc00818b478: b40002c8     	cbz	x8, 0xffffffc00818b4d0 <commit_creds+0x278>
+ffffffc00818b47c: 9101c109     	add	x9, x8, #0x70
+ffffffc00818b480: 1400000c     	b	0xffffffc00818b4b0 <commit_creds+0x258>
+ffffffc00818b484: 1400000b     	b	0xffffffc00818b4b0 <commit_creds+0x258>
+ffffffc00818b488: 5280002a     	mov	w10, #0x1       // =1
+ffffffc00818b48c: f8ea012b     	ldaddal	x10, x11, [x9]
+ffffffc00818b490: 8b0b014a     	add	x10, x10, x11
+ffffffc00818b494: f9400909     	ldr	x9, [x8, #0x10]
+ffffffc00818b498: 91098129     	add	x9, x9, #0x260
+ffffffc00818b49c: c8dffd29     	ldar	x9, [x9]
+ffffffc00818b4a0: f9400908     	ldr	x8, [x8, #0x10]
+ffffffc00818b4a4: f9410508     	ldr	x8, [x8, #0x208]
+ffffffc00818b4a8: b5fffea8     	cbnz	x8, 0xffffffc00818b47c <commit_creds+0x224>
+ffffffc00818b4ac: 14000009     	b	0xffffffc00818b4d0 <commit_creds+0x278>
+ffffffc00818b4b0: d503249f     	bti	j
+ffffffc00818b4b4: f9800131     	prfm	pstl1strm, [x9]
+ffffffc00818b4b8: c85f7d2a     	ldxr	x10, [x9]
+ffffffc00818b4bc: 9100054a     	add	x10, x10, #0x1
+ffffffc00818b4c0: c80bfd2a     	stlxr	w11, x10, [x9]
+ffffffc00818b4c4: 35ffffab     	cbnz	w11, 0xffffffc00818b4b8 <commit_creds+0x260>
+ffffffc00818b4c8: d5033bbf     	dmb	ish
+ffffffc00818b4cc: 17fffff2     	b	0xffffffc00818b494 <commit_creds+0x23c>
+ffffffc00818b4d0: 911e4288     	add	x8, x20, #0x790
+ffffffc00818b4d4: c89ffd15     	stlr	x21, [x8]
+ffffffc00818b4d8: 911e6289     	add	x9, x20, #0x798
+ffffffc00818b4dc: c89ffd35     	stlr	x21, [x9]
+ffffffc00818b4e0: d503201f     	nop
+ffffffc00818b4e4: f94042a8     	ldr	x8, [x21, #0x80]
+ffffffc00818b4e8: f9404269     	ldr	x9, [x19, #0x80]
+ffffffc00818b4ec: eb09011f     	cmp	x8, x9
+ffffffc00818b4f0: 540000a1     	b.ne	0xffffffc00818b504 <commit_creds+0x2ac>
+ffffffc00818b4f4: f94046a8     	ldr	x8, [x21, #0x88]
+ffffffc00818b4f8: f9404669     	ldr	x9, [x19, #0x88]
+ffffffc00818b4fc: eb09011f     	cmp	x8, x9
+ffffffc00818b500: 54000320     	b.eq	0xffffffc00818b564 <commit_creds+0x30c>
+ffffffc00818b504: f9404a68     	ldr	x8, [x19, #0x90]
+ffffffc00818b508: b40002e8     	cbz	x8, 0xffffffc00818b564 <commit_creds+0x30c>
+ffffffc00818b50c: 92800009     	mov	x9, #-0x1       // =-1
+ffffffc00818b510: 9101c10a     	add	x10, x8, #0x70
+ffffffc00818b514: 1400000a     	b	0xffffffc00818b53c <commit_creds+0x2e4>
+ffffffc00818b518: 14000009     	b	0xffffffc00818b53c <commit_creds+0x2e4>
+ffffffc00818b51c: 9280000b     	mov	x11, #-0x1      // =-1
+ffffffc00818b520: f8eb014c     	ldaddal	x11, x12, [x10]
+ffffffc00818b524: 8b0c016b     	add	x11, x11, x12
+ffffffc00818b528: b7f801ab     	tbnz	x11, #0x3f, 0xffffffc00818b55c <commit_creds+0x304>
+ffffffc00818b52c: f9400908     	ldr	x8, [x8, #0x10]
+ffffffc00818b530: f9410508     	ldr	x8, [x8, #0x208]
+ffffffc00818b534: b5fffee8     	cbnz	x8, 0xffffffc00818b510 <commit_creds+0x2b8>
+ffffffc00818b538: 1400000b     	b	0xffffffc00818b564 <commit_creds+0x30c>
+ffffffc00818b53c: d503249f     	bti	j
+ffffffc00818b540: f9800151     	prfm	pstl1strm, [x10]
+ffffffc00818b544: c85f7d4b     	ldxr	x11, [x10]
+ffffffc00818b548: 8b09016b     	add	x11, x11, x9
+ffffffc00818b54c: c80cfd4b     	stlxr	w12, x11, [x10]
+ffffffc00818b550: 35ffffac     	cbnz	w12, 0xffffffc00818b544 <commit_creds+0x2ec>
+ffffffc00818b554: d5033bbf     	dmb	ish
+ffffffc00818b558: b6fffeab     	tbz	x11, #0x3f, 0xffffffc00818b52c <commit_creds+0x2d4>
+ffffffc00818b55c: d4210000     	brk	#0x800
+ffffffc00818b560: 17fffff3     	b	0xffffffc00818b52c <commit_creds+0x2d4>
+ffffffc00818b564: b40006d3     	cbz	x19, 0xffffffc00818b63c <commit_creds+0x3e4>
+ffffffc00818b568: 1400004b     	b	0xffffffc00818b694 <commit_creds+0x43c>
+ffffffc00818b56c: 1400004a     	b	0xffffffc00818b694 <commit_creds+0x43c>
+ffffffc00818b570: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818b574: 4b0803e8     	neg	w8, w8
+ffffffc00818b578: b8e80269     	ldaddal	w8, w9, [x19]
+ffffffc00818b57c: 0b090108     	add	w8, w8, w9
+ffffffc00818b580: 35000288     	cbnz	w8, 0xffffffc00818b5d0 <commit_creds+0x378>
+ffffffc00818b584: 88dffe68     	ldar	w8, [x19]
+ffffffc00818b588: 35000ca8     	cbnz	w8, 0xffffffc00818b71c <commit_creds+0x4c4>
+ffffffc00818b58c: f943ce88     	ldr	x8, [x20, #0x798]
+ffffffc00818b590: eb13011f     	cmp	x8, x19
+ffffffc00818b594: 54000c60     	b.eq	0xffffffc00818b720 <commit_creds+0x4c8>
+ffffffc00818b598: f943ca88     	ldr	x8, [x20, #0x790]
+ffffffc00818b59c: eb13011f     	cmp	x8, x19
+ffffffc00818b5a0: 54000c20     	b.eq	0xffffffc00818b724 <commit_creds+0x4cc>
+ffffffc00818b5a4: aa1303e0     	mov	x0, x19
+ffffffc00818b5a8: b84a0c08     	ldr	w8, [x0, #0xa0]!
+ffffffc00818b5ac: 34000068     	cbz	w8, 0xffffffc00818b5b8 <commit_creds+0x360>
+ffffffc00818b5b0: 97fff8c8     	bl	0xffffffc0081898d0 <put_cred_rcu>
+ffffffc00818b5b4: 14000007     	b	0xffffffc00818b5d0 <commit_creds+0x378>
+ffffffc00818b5b8: f0014b68     	adrp	x8, 0xffffffc00aafa000 <nf_conntrack_locks+0x900>
+ffffffc00818b5bc: b000ae89     	adrp	x9, 0xffffffc00975c000 <ipip6_tunnel_uninit.cfi_jt>
+ffffffc00818b5c0: 910f2129     	add	x9, x9, #0x3c8
+ffffffc00818b5c4: 91010121     	add	x1, x9, #0x40
+ffffffc00818b5c8: 39798102     	ldrb	w2, [x8, #0xe60]
+ffffffc00818b5cc: 9402d37a     	bl	0xffffffc0082403b4 <__call_rcu_common>
+ffffffc00818b5d0: 1400003b     	b	0xffffffc00818b6bc <commit_creds+0x464>
+ffffffc00818b5d4: 1400003a     	b	0xffffffc00818b6bc <commit_creds+0x464>
+ffffffc00818b5d8: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818b5dc: 4b0803e8     	neg	w8, w8
+ffffffc00818b5e0: b8e80269     	ldaddal	w8, w9, [x19]
+ffffffc00818b5e4: 0b090108     	add	w8, w8, w9
+ffffffc00818b5e8: 350002a8     	cbnz	w8, 0xffffffc00818b63c <commit_creds+0x3e4>
+ffffffc00818b5ec: 88dffe68     	ldar	w8, [x19]
+ffffffc00818b5f0: 350009c8     	cbnz	w8, 0xffffffc00818b728 <commit_creds+0x4d0>
+ffffffc00818b5f4: f943ce88     	ldr	x8, [x20, #0x798]
+ffffffc00818b5f8: eb13011f     	cmp	x8, x19
+ffffffc00818b5fc: 54000980     	b.eq	0xffffffc00818b72c <commit_creds+0x4d4>
+ffffffc00818b600: f943ca88     	ldr	x8, [x20, #0x790]
+ffffffc00818b604: eb13011f     	cmp	x8, x19
+ffffffc00818b608: 54000940     	b.eq	0xffffffc00818b730 <commit_creds+0x4d8>
+ffffffc00818b60c: b84a0e68     	ldr	w8, [x19, #0xa0]!
+ffffffc00818b610: 34000088     	cbz	w8, 0xffffffc00818b620 <commit_creds+0x3c8>
+ffffffc00818b614: aa1303e0     	mov	x0, x19
+ffffffc00818b618: 97fff8ae     	bl	0xffffffc0081898d0 <put_cred_rcu>
+ffffffc00818b61c: 14000008     	b	0xffffffc00818b63c <commit_creds+0x3e4>
+ffffffc00818b620: f0014b68     	adrp	x8, 0xffffffc00aafa000 <nf_conntrack_locks+0x900>
+ffffffc00818b624: b000ae89     	adrp	x9, 0xffffffc00975c000 <ipip6_tunnel_uninit.cfi_jt>
+ffffffc00818b628: 910f2129     	add	x9, x9, #0x3c8
+ffffffc00818b62c: aa1303e0     	mov	x0, x19
+ffffffc00818b630: 91010121     	add	x1, x9, #0x40
+ffffffc00818b634: 39798102     	ldrb	w2, [x8, #0xe60]
+ffffffc00818b638: 9402d35f     	bl	0xffffffc0082403b4 <__call_rcu_common>
+ffffffc00818b63c: a9424ff4     	ldp	x20, x19, [sp, #0x20]
+ffffffc00818b640: 2a1f03e0     	mov	w0, wzr
+ffffffc00818b644: a94157f6     	ldp	x22, x21, [sp, #0x10]
+ffffffc00818b648: a8c37bfd     	ldp	x29, x30, [sp], #0x30
+ffffffc00818b64c: f85f8e5e     	ldr	x30, [x18, #-0x8]!
+ffffffc00818b650: d50323bf     	autiasp
+ffffffc00818b654: d65f03c0     	ret
+ffffffc00818b658: aa1603e0     	mov	x0, x22
+ffffffc00818b65c: 52800041     	mov	w1, #0x2        // =2
+ffffffc00818b660: 945786b4     	bl	0xffffffc00976d130 <rwsem_down_write_slowpath>
+ffffffc00818b664: 17ffff76     	b	0xffffffc00818b43c <commit_creds+0x1e4>
+ffffffc00818b668: aa1603e0     	mov	x0, x22
+ffffffc00818b66c: 52800041     	mov	w1, #0x2        // =2
+ffffffc00818b670: 945786b0     	bl	0xffffffc00976d130 <rwsem_down_write_slowpath>
+ffffffc00818b674: 17ffff62     	b	0xffffffc00818b3fc <commit_creds+0x1a4>
+ffffffc00818b678: d503249f     	bti	j
+ffffffc00818b67c: f98002b1     	prfm	pstl1strm, [x21]
+ffffffc00818b680: 885f7ea8     	ldxr	w8, [x21]
+ffffffc00818b684: 11000508     	add	w8, w8, #0x1
+ffffffc00818b688: 88097ea8     	stxr	w9, w8, [x21]
+ffffffc00818b68c: 35ffffa9     	cbnz	w9, 0xffffffc00818b680 <commit_creds+0x428>
+ffffffc00818b690: 17ffff07     	b	0xffffffc00818b2ac <commit_creds+0x54>
+ffffffc00818b694: d503249f     	bti	j
+ffffffc00818b698: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818b69c: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818b6a0: 885f7e68     	ldxr	w8, [x19]
+ffffffc00818b6a4: 4b090108     	sub	w8, w8, w9
+ffffffc00818b6a8: 880afe68     	stlxr	w10, w8, [x19]
+ffffffc00818b6ac: 35ffffaa     	cbnz	w10, 0xffffffc00818b6a0 <commit_creds+0x448>
+ffffffc00818b6b0: d5033bbf     	dmb	ish
+ffffffc00818b6b4: 35fff8e8     	cbnz	w8, 0xffffffc00818b5d0 <commit_creds+0x378>
+ffffffc00818b6b8: 17ffffb3     	b	0xffffffc00818b584 <commit_creds+0x32c>
+ffffffc00818b6bc: d503249f     	bti	j
+ffffffc00818b6c0: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818b6c4: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818b6c8: 885f7e68     	ldxr	w8, [x19]
+ffffffc00818b6cc: 4b090108     	sub	w8, w8, w9
+ffffffc00818b6d0: 880afe68     	stlxr	w10, w8, [x19]
+ffffffc00818b6d4: 35ffffaa     	cbnz	w10, 0xffffffc00818b6c8 <commit_creds+0x470>
+ffffffc00818b6d8: d5033bbf     	dmb	ish
+ffffffc00818b6dc: 35fffb08     	cbnz	w8, 0xffffffc00818b63c <commit_creds+0x3e4>
+ffffffc00818b6e0: 17ffffc3     	b	0xffffffc00818b5ec <commit_creds+0x394>
+ffffffc00818b6e4: d4210000     	brk	#0x800
+ffffffc00818b6e8: d4210000     	brk	#0x800
+ffffffc00818b6ec: d503249f     	bti	j
+ffffffc00818b6f0: b0015b48     	adrp	x8, 0xffffffc00acf4000 <__tracepoint_android_vh_vmscan_kswapd_done+0x10>
+ffffffc00818b6f4: f940f116     	ldr	x22, [x8, #0x1e0]
+ffffffc00818b6f8: f84186c8     	ldr	x8, [x22], #0x18
+ffffffc00818b6fc: f85f02c0     	ldur	x0, [x22, #-0x10]
+ffffffc00818b700: aa1403e1     	mov	x1, x20
+ffffffc00818b704: aa1503e2     	mov	x2, x21
+ffffffc00818b708: d63f0100     	blr	x8
+ffffffc00818b70c: c8dffec8     	ldar	x8, [x22]
+ffffffc00818b710: 910062d6     	add	x22, x22, #0x18
+ffffffc00818b714: b5ffff48     	cbnz	x8, 0xffffffc00818b6fc <commit_creds+0x4a4>
+ffffffc00818b718: 17ffff73     	b	0xffffffc00818b4e4 <commit_creds+0x28c>
+ffffffc00818b71c: d4210000     	brk	#0x800
+ffffffc00818b720: d4210000     	brk	#0x800
+ffffffc00818b724: d4210000     	brk	#0x800
+ffffffc00818b728: d4210000     	brk	#0x800
+ffffffc00818b72c: d4210000     	brk	#0x800
+ffffffc00818b730: d4210000     	brk	#0x800
+ffffffc00818b734: b8bfc008     	ldapr	w8, [x0]
+ffffffc00818b738: f8bfc101     	ldapr	x1, [x8]
+ffffffc00818b73c: f8bfc129     	ldapr	x9, [x9]
+ffffffc00818b740: b8bfc268     	ldapr	w8, [x19]
+ffffffc00818b744: b8bfc268     	ldapr	w8, [x19]
+ffffffc00818b748: f8bfc2c8     	ldapr	x8, [x22]
+
+ffffffc00818b74c <cred_fscmp>:
+ffffffc00818b74c: d503233f     	paciasp
+ffffffc00818b750: eb01001f     	cmp	x0, x1
+ffffffc00818b754: 54000580     	b.eq	0xffffffc00818b804 <cred_fscmp+0xb8>
+ffffffc00818b758: b9401c08     	ldr	w8, [x0, #0x1c]
+ffffffc00818b75c: b9401c29     	ldr	w9, [x1, #0x1c]
+ffffffc00818b760: 6b09011f     	cmp	w8, w9
+ffffffc00818b764: 540000c3     	b.lo	0xffffffc00818b77c <cred_fscmp+0x30>
+ffffffc00818b768: 54000128     	b.hi	0xffffffc00818b78c <cred_fscmp+0x40>
+ffffffc00818b76c: b9402008     	ldr	w8, [x0, #0x20]
+ffffffc00818b770: b9402029     	ldr	w9, [x1, #0x20]
+ffffffc00818b774: 6b09011f     	cmp	w8, w9
+ffffffc00818b778: 54000082     	b.hs	0xffffffc00818b788 <cred_fscmp+0x3c>
+ffffffc00818b77c: 12800000     	mov	w0, #-0x1       // =-1
+ffffffc00818b780: d50323bf     	autiasp
+ffffffc00818b784: d65f03c0     	ret
+ffffffc00818b788: 54000089     	b.ls	0xffffffc00818b798 <cred_fscmp+0x4c>
+ffffffc00818b78c: 52800020     	mov	w0, #0x1        // =1
+ffffffc00818b790: d50323bf     	autiasp
+ffffffc00818b794: d65f03c0     	ret
+ffffffc00818b798: f9404c0a     	ldr	x10, [x0, #0x98]
+ffffffc00818b79c: f9404c29     	ldr	x9, [x1, #0x98]
+ffffffc00818b7a0: eb09015f     	cmp	x10, x9
+ffffffc00818b7a4: 54000300     	b.eq	0xffffffc00818b804 <cred_fscmp+0xb8>
+ffffffc00818b7a8: b4fffeaa     	cbz	x10, 0xffffffc00818b77c <cred_fscmp+0x30>
+ffffffc00818b7ac: b4ffff09     	cbz	x9, 0xffffffc00818b78c <cred_fscmp+0x40>
+ffffffc00818b7b0: b9400548     	ldr	w8, [x10, #0x4]
+ffffffc00818b7b4: b940052b     	ldr	w11, [x9, #0x4]
+ffffffc00818b7b8: 6b0b011f     	cmp	w8, w11
+ffffffc00818b7bc: 54fffe0b     	b.lt	0xffffffc00818b77c <cred_fscmp+0x30>
+ffffffc00818b7c0: 6b0b011f     	cmp	w8, w11
+ffffffc00818b7c4: 54fffe4c     	b.gt	0xffffffc00818b78c <cred_fscmp+0x40>
+ffffffc00818b7c8: 7100051f     	cmp	w8, #0x1
+ffffffc00818b7cc: 540001cb     	b.lt	0xffffffc00818b804 <cred_fscmp+0xb8>
+ffffffc00818b7d0: 91002129     	add	x9, x9, #0x8
+ffffffc00818b7d4: 9100214a     	add	x10, x10, #0x8
+ffffffc00818b7d8: b940014b     	ldr	w11, [x10]
+ffffffc00818b7dc: b940012c     	ldr	w12, [x9]
+ffffffc00818b7e0: 6b0c017f     	cmp	w11, w12
+ffffffc00818b7e4: 54fffcc3     	b.lo	0xffffffc00818b77c <cred_fscmp+0x30>
+ffffffc00818b7e8: 54fffd28     	b.hi	0xffffffc00818b78c <cred_fscmp+0x40>
+ffffffc00818b7ec: 2a1f03e0     	mov	w0, wzr
+ffffffc00818b7f0: f1000508     	subs	x8, x8, #0x1
+ffffffc00818b7f4: 91001129     	add	x9, x9, #0x4
+ffffffc00818b7f8: 9100114a     	add	x10, x10, #0x4
+ffffffc00818b7fc: 54fffee1     	b.ne	0xffffffc00818b7d8 <cred_fscmp+0x8c>

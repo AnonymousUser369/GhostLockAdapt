@@ -1,0 +1,66 @@
+ffffffc00855f958 <__get_task_comm>:
+ffffffc00855f958: d503233f     	paciasp
+ffffffc00855f95c: f800865e     	str	x30, [x18], #0x8
+ffffffc00855f960: a9bd7bfd     	stp	x29, x30, [sp, #-0x30]!
+ffffffc00855f964: a90157f6     	stp	x22, x21, [sp, #0x10]
+ffffffc00855f968: 910003fd     	mov	x29, sp
+ffffffc00855f96c: a9024ff4     	stp	x20, x19, [sp, #0x20]
+ffffffc00855f970: d5384116     	mrs	x22, SP_EL0
+ffffffc00855f974: 910042c8     	add	x8, x22, #0x10
+ffffffc00855f978: 88dffd08     	ldar	w8, [x8]
+ffffffc00855f97c: aa0203f4     	mov	x20, x2
+ffffffc00855f980: 11000508     	add	w8, w8, #0x1
+ffffffc00855f984: aa0103f5     	mov	x21, x1
+ffffffc00855f988: aa0003f3     	mov	x19, x0
+ffffffc00855f98c: b90012c8     	str	w8, [x22, #0x10]
+ffffffc00855f990: 91220048     	add	x8, x2, #0x880
+ffffffc00855f994: 14000021     	b	0xffffffc00855fa18 <__get_task_comm+0xc0>
+ffffffc00855f998: 14000020     	b	0xffffffc00855fa18 <__get_task_comm+0xc0>
+ffffffc00855f99c: aa1f03e1     	mov	x1, xzr
+ffffffc00855f9a0: aa0803e0     	mov	x0, x8
+ffffffc00855f9a4: 52800022     	mov	w2, #0x1        // =1
+ffffffc00855f9a8: 2a0103e9     	mov	w9, w1
+ffffffc00855f9ac: 88e97d02     	casa	w9, w2, [x8]
+ffffffc00855f9b0: 2a0903e0     	mov	w0, w9
+ffffffc00855f9b4: aa0003e1     	mov	x1, x0
+ffffffc00855f9b8: 35000441     	cbnz	w1, 0xffffffc00855fa40 <__get_task_comm+0xe8>
+ffffffc00855f9bc: 911ea281     	add	x1, x20, #0x7a8
+ffffffc00855f9c0: aa1303e0     	mov	x0, x19
+ffffffc00855f9c4: aa1503e2     	mov	x2, x21
+ffffffc00855f9c8: 9413ed2e     	bl	0xffffffc008a5ae80 <strncpy>
+ffffffc00855f9cc: 2a1f03e9     	mov	w9, wzr
+ffffffc00855f9d0: 9122028a     	add	x10, x20, #0x880
+ffffffc00855f9d4: 089ffd49     	stlrb	w9, [x10]
+ffffffc00855f9d8: 910042c8     	add	x8, x22, #0x10
+ffffffc00855f9dc: c8dffd09     	ldar	x9, [x8]
+ffffffc00855f9e0: f1000529     	subs	x9, x9, #0x1
+ffffffc00855f9e4: b90012c9     	str	w9, [x22, #0x10]
+ffffffc00855f9e8: 54000140     	b.eq	0xffffffc00855fa10 <__get_task_comm+0xb8>
+ffffffc00855f9ec: c8dffd08     	ldar	x8, [x8]
+ffffffc00855f9f0: b4000108     	cbz	x8, 0xffffffc00855fa10 <__get_task_comm+0xb8>
+ffffffc00855f9f4: aa1303e0     	mov	x0, x19
+ffffffc00855f9f8: a9424ff4     	ldp	x20, x19, [sp, #0x20]
+ffffffc00855f9fc: a94157f6     	ldp	x22, x21, [sp, #0x10]
+ffffffc00855fa00: a8c37bfd     	ldp	x29, x30, [sp], #0x30
+ffffffc00855fa04: f85f8e5e     	ldr	x30, [x18, #-0x8]!
+ffffffc00855fa08: d50323bf     	autiasp
+ffffffc00855fa0c: d65f03c0     	ret
+ffffffc00855fa10: 944820e2     	bl	0xffffffc009767d98 <preempt_schedule>
+ffffffc00855fa14: 17fffff8     	b	0xffffffc00855f9f4 <__get_task_comm+0x9c>
+ffffffc00855fa18: d503249f     	bti	j
+ffffffc00855fa1c: aa1f03e9     	mov	x9, xzr
+ffffffc00855fa20: 5280002a     	mov	w10, #0x1       // =1
+ffffffc00855fa24: f9800111     	prfm	pstl1strm, [x8]
+ffffffc00855fa28: 885ffd01     	ldaxr	w1, [x8]
+ffffffc00855fa2c: 4a09002b     	eor	w11, w1, w9
+ffffffc00855fa30: 3500006b     	cbnz	w11, 0xffffffc00855fa3c <__get_task_comm+0xe4>
+ffffffc00855fa34: 880b7d0a     	stxr	w11, w10, [x8]
+ffffffc00855fa38: 35ffff8b     	cbnz	w11, 0xffffffc00855fa28 <__get_task_comm+0xd0>
+ffffffc00855fa3c: 34fffc01     	cbz	w1, 0xffffffc00855f9bc <__get_task_comm+0x64>
+ffffffc00855fa40: aa0803e0     	mov	x0, x8
+ffffffc00855fa44: 97f23e55     	bl	0xffffffc0081ef398 <queued_spin_lock_slowpath>
+ffffffc00855fa48: 17ffffdd     	b	0xffffffc00855f9bc <__get_task_comm+0x64>
+ffffffc00855fa4c: b8bfc108     	ldapr	w8, [x8]
+ffffffc00855fa50: f8bfc109     	ldapr	x9, [x8]
+ffffffc00855fa54: f8bfc108     	ldapr	x8, [x8]
+

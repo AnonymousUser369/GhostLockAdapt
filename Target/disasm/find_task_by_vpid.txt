@@ -1,0 +1,60 @@
+ffffffc00817c924 <find_task_by_vpid>:
+ffffffc00817c924: d503233f     	paciasp
+ffffffc00817c928: d5384108     	mrs	x8, SP_EL0
+ffffffc00817c92c: f9432108     	ldr	x8, [x8, #0x640]
+ffffffc00817c930: b4000088     	cbz	x8, 0xffffffc00817c940 <find_task_by_vpid+0x1c>
+ffffffc00817c934: b9400509     	ldr	w9, [x8, #0x4]
+ffffffc00817c938: 8b091108     	add	x8, x8, x9, lsl #4
+ffffffc00817c93c: f9403508     	ldr	x8, [x8, #0x68]
+ffffffc00817c940: b940110a     	ldr	w10, [x8, #0x10]
+ffffffc00817c944: 93407c0b     	sxtw	x11, w0
+ffffffc00817c948: 91002109     	add	x9, x8, #0x8
+ffffffc00817c94c: c8dffd29     	ldar	x9, [x9]
+ffffffc00817c950: cb0a016a     	sub	x10, x11, x10
+ffffffc00817c954: 9240052b     	and	x11, x9, #0x3
+ffffffc00817c958: f100097f     	cmp	x11, #0x2
+ffffffc00817c95c: 54000381     	b.ne	0xffffffc00817c9cc <find_task_by_vpid+0xa8>
+ffffffc00817c960: 5280080b     	mov	w11, #0x40      // =64
+ffffffc00817c964: 927ef92c     	and	x12, x9, #0xfffffffffffffffd
+ffffffc00817c968: 3940018c     	ldrb	w12, [x12]
+ffffffc00817c96c: 9acc216c     	lsl	x12, x11, x12
+ffffffc00817c970: d100058c     	sub	x12, x12, #0x1
+ffffffc00817c974: eb0a019f     	cmp	x12, x10
+ffffffc00817c978: 540003c3     	b.lo	0xffffffc00817c9f0 <find_task_by_vpid+0xcc>
+ffffffc00817c97c: 927ef92c     	and	x12, x9, #0xfffffffffffffffd
+ffffffc00817c980: 39400189     	ldrb	w9, [x12]
+ffffffc00817c984: 9ac92549     	lsr	x9, x10, x9
+ffffffc00817c988: 92401529     	and	x9, x9, #0x3f
+ffffffc00817c98c: 8b090d89     	add	x9, x12, x9, lsl #3
+ffffffc00817c990: 9100a129     	add	x9, x9, #0x28
+ffffffc00817c994: c8dffd29     	ldar	x9, [x9]
+ffffffc00817c998: f110093f     	cmp	x9, #0x402
+ffffffc00817c99c: 540000e0     	b.eq	0xffffffc00817c9b8 <find_task_by_vpid+0x94>
+ffffffc00817c9a0: 3940018c     	ldrb	w12, [x12]
+ffffffc00817c9a4: 3400016c     	cbz	w12, 0xffffffc00817c9d0 <find_task_by_vpid+0xac>
+ffffffc00817c9a8: 9240052c     	and	x12, x9, #0x3
+ffffffc00817c9ac: f100099f     	cmp	x12, #0x2
+ffffffc00817c9b0: 54fffe60     	b.eq	0xffffffc00817c97c <find_task_by_vpid+0x58>
+ffffffc00817c9b4: 14000007     	b	0xffffffc00817c9d0 <find_task_by_vpid+0xac>
+ffffffc00817c9b8: 91002109     	add	x9, x8, #0x8
+ffffffc00817c9bc: c8dffd29     	ldar	x9, [x9]
+ffffffc00817c9c0: 9240052c     	and	x12, x9, #0x3
+ffffffc00817c9c4: f100099f     	cmp	x12, #0x2
+ffffffc00817c9c8: 54fffce0     	b.eq	0xffffffc00817c964 <find_task_by_vpid+0x40>
+ffffffc00817c9cc: b500012a     	cbnz	x10, 0xffffffc00817c9f0 <find_task_by_vpid+0xcc>
+ffffffc00817c9d0: b4000109     	cbz	x9, 0xffffffc00817c9f0 <find_task_by_vpid+0xcc>
+ffffffc00817c9d4: 91004128     	add	x8, x9, #0x10
+ffffffc00817c9d8: c8dffd08     	ldar	x8, [x8]
+ffffffc00817c9dc: d1192109     	sub	x9, x8, #0x648
+ffffffc00817c9e0: f100011f     	cmp	x8, #0x0
+ffffffc00817c9e4: d50323bf     	autiasp
+ffffffc00817c9e8: 9a8903e0     	csel	x0, xzr, x9, eq
+ffffffc00817c9ec: d65f03c0     	ret
+ffffffc00817c9f0: aa1f03e0     	mov	x0, xzr
+ffffffc00817c9f4: d50323bf     	autiasp
+ffffffc00817c9f8: d65f03c0     	ret
+ffffffc00817c9fc: f8bfc129     	ldapr	x9, [x9]
+ffffffc00817ca00: f8bfc129     	ldapr	x9, [x9]
+ffffffc00817ca04: f8bfc129     	ldapr	x9, [x9]
+ffffffc00817ca08: f8bfc108     	ldapr	x8, [x8]
+

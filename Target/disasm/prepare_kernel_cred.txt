@@ -1,0 +1,395 @@
+
+/mnt/Data/AI_Workspace/ghostlock_repo/Target/kernel_5-15-180-vmlinux.elf:	file format elf64-littleaarch64
+
+Disassembly of section .kernel:
+
+ffffffc008189ff4 <prepare_kernel_cred>:
+ffffffc008189ff4: d503233f     	paciasp
+ffffffc008189ff8: f800865e     	str	x30, [x18], #0x8
+ffffffc008189ffc: a9bd7bfd     	stp	x29, x30, [sp, #-0x30]!
+ffffffc00818a000: f9000bf5     	str	x21, [sp, #0x10]
+ffffffc00818a004: 910003fd     	mov	x29, sp
+ffffffc00818a008: a9024ff4     	stp	x20, x19, [sp, #0x20]
+ffffffc00818a00c: f0015e48     	adrp	x8, 0xffffffc00ad55000 <print_tainted.buf+0x18>
+ffffffc00818a010: aa0003f5     	mov	x21, x0
+ffffffc00818a014: 52819801     	mov	w1, #0xcc0      // =3264
+ffffffc00818a018: f944a500     	ldr	x0, [x8, #0x948]
+ffffffc00818a01c: 940db3b0     	bl	0xffffffc0084f6edc <kmem_cache_alloc>
+ffffffc00818a020: aa0003f4     	mov	x20, x0
+ffffffc00818a024: b4001580     	cbz	x0, 0xffffffc00818a2d4 <prepare_kernel_cred+0x2e0>
+ffffffc00818a028: b4000615     	cbz	x21, 0xffffffc00818a0e8 <prepare_kernel_cred+0xf4>
+ffffffc00818a02c: d5384108     	mrs	x8, SP_EL0
+ffffffc00818a030: 91113109     	add	x9, x8, #0x44c
+ffffffc00818a034: 88dffd2a     	ldar	w10, [x9]
+ffffffc00818a038: 1100054a     	add	w10, w10, #0x1
+ffffffc00818a03c: b9044d0a     	str	w10, [x8, #0x44c]
+ffffffc00818a040: 911e42aa     	add	x10, x21, #0x790
+ffffffc00818a044: c8dffd53     	ldar	x19, [x10]
+ffffffc00818a048: b40017d3     	cbz	x19, 0xffffffc00818a340 <prepare_kernel_cred+0x34c>
+ffffffc00818a04c: 88dffe6a     	ldar	w10, [x19]
+ffffffc00818a050: 3400034a     	cbz	w10, 0xffffffc00818a0b8 <prepare_kernel_cred+0xc4>
+ffffffc00818a054: 11000542     	add	w2, w10, #0x1
+ffffffc00818a058: 2a0a03e1     	mov	w1, w10
+ffffffc00818a05c: 1400000a     	b	0xffffffc00818a084 <prepare_kernel_cred+0x90>
+ffffffc00818a060: 14000009     	b	0xffffffc00818a084 <prepare_kernel_cred+0x90>
+ffffffc00818a064: aa1303e0     	mov	x0, x19
+ffffffc00818a068: 2a0103eb     	mov	w11, w1
+ffffffc00818a06c: 88ebfe62     	casal	w11, w2, [x19]
+ffffffc00818a070: 2a0b03e0     	mov	w0, w11
+ffffffc00818a074: 6b00015f     	cmp	w10, w0
+ffffffc00818a078: 2a0003ea     	mov	w10, w0
+ffffffc00818a07c: 54000160     	b.eq	0xffffffc00818a0a8 <prepare_kernel_cred+0xb4>
+ffffffc00818a080: 17fffff4     	b	0xffffffc00818a050 <prepare_kernel_cred+0x5c>
+ffffffc00818a084: d503249f     	bti	j
+ffffffc00818a088: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818a08c: 885f7e60     	ldxr	w0, [x19]
+ffffffc00818a090: 4a01000b     	eor	w11, w0, w1
+ffffffc00818a094: 3500008b     	cbnz	w11, 0xffffffc00818a0a4 <prepare_kernel_cred+0xb0>
+ffffffc00818a098: 880bfe62     	stlxr	w11, w2, [x19]
+ffffffc00818a09c: 35ffff8b     	cbnz	w11, 0xffffffc00818a08c <prepare_kernel_cred+0x98>
+ffffffc00818a0a0: d5033bbf     	dmb	ish
+ffffffc00818a0a4: 17fffff4     	b	0xffffffc00818a074 <prepare_kernel_cred+0x80>
+ffffffc00818a0a8: aa1303ea     	mov	x10, x19
+ffffffc00818a0ac: b900a27f     	str	wzr, [x19, #0xa0]
+ffffffc00818a0b0: b4fffc8a     	cbz	x10, 0xffffffc00818a040 <prepare_kernel_cred+0x4c>
+ffffffc00818a0b4: 14000003     	b	0xffffffc00818a0c0 <prepare_kernel_cred+0xcc>
+ffffffc00818a0b8: aa1f03ea     	mov	x10, xzr
+ffffffc00818a0bc: b4fffc2a     	cbz	x10, 0xffffffc00818a040 <prepare_kernel_cred+0x4c>
+ffffffc00818a0c0: 88dffd29     	ldar	w9, [x9]
+ffffffc00818a0c4: 71000529     	subs	w9, w9, #0x1
+ffffffc00818a0c8: b9044d09     	str	w9, [x8, #0x44c]
+ffffffc00818a0cc: 540001e1     	b.ne	0xffffffc00818a108 <prepare_kernel_cred+0x114>
+ffffffc00818a0d0: 91114109     	add	x9, x8, #0x450
+ffffffc00818a0d4: 88dffd29     	ldar	w9, [x9]
+ffffffc00818a0d8: 34000189     	cbz	w9, 0xffffffc00818a108 <prepare_kernel_cred+0x114>
+ffffffc00818a0dc: aa0803e0     	mov	x0, x8
+ffffffc00818a0e0: 9402fa10     	bl	0xffffffc008248920 <rcu_read_unlock_special>
+ffffffc00818a0e4: 14000009     	b	0xffffffc00818a108 <prepare_kernel_cred+0x114>
+ffffffc00818a0e8: f0015388     	adrp	x8, 0xffffffc00abfd000 <erofs_xattr_handlers+0x28>
+ffffffc00818a0ec: b907391f     	str	wzr, [x8, #0x738]
+ffffffc00818a0f0: 140000cd     	b	0xffffffc00818a424 <prepare_kernel_cred+0x430>
+ffffffc00818a0f4: 140000cc     	b	0xffffffc00818a424 <prepare_kernel_cred+0x430>
+ffffffc00818a0f8: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a0fc: f0015393     	adrp	x19, 0xffffffc00abfd000 <erofs_xattr_handlers+0x28>
+ffffffc00818a100: 911a6273     	add	x19, x19, #0x698
+ffffffc00818a104: b828027f     	stadd	w8, [x19]
+ffffffc00818a108: aa1403e0     	mov	x0, x20
+ffffffc00818a10c: aa1303e1     	mov	x1, x19
+ffffffc00818a110: 52801602     	mov	w2, #0xb0       // =176
+ffffffc00818a114: 97fa5a37     	bl	0xffffffc0080209f0 <memmove>
+ffffffc00818a118: aa1403f5     	mov	x21, x20
+ffffffc00818a11c: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a120: b80a0ebf     	str	wzr, [x21, #0xa0]!
+ffffffc00818a124: b9000288     	str	w8, [x20]
+ffffffc00818a128: f9404288     	ldr	x8, [x20, #0x80]
+ffffffc00818a12c: 14000086     	b	0xffffffc00818a344 <prepare_kernel_cred+0x350>
+ffffffc00818a130: 14000085     	b	0xffffffc00818a344 <prepare_kernel_cred+0x350>
+ffffffc00818a134: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a138: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a13c: 34001129     	cbz	w9, 0xffffffc00818a360 <prepare_kernel_cred+0x36c>
+ffffffc00818a140: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a144: 2a090149     	orr	w9, w10, w9
+ffffffc00818a148: 37f80e49     	tbnz	w9, #0x1f, 0xffffffc00818a310 <prepare_kernel_cred+0x31c>
+ffffffc00818a14c: f9404e88     	ldr	x8, [x20, #0x98]
+ffffffc00818a150: 14000090     	b	0xffffffc00818a390 <prepare_kernel_cred+0x39c>
+ffffffc00818a154: 1400008f     	b	0xffffffc00818a390 <prepare_kernel_cred+0x39c>
+ffffffc00818a158: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a15c: b829011f     	stadd	w9, [x8]
+ffffffc00818a160: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a164: f9404a80     	ldr	x0, [x20, #0x90]
+ffffffc00818a168: a906fe9f     	stp	xzr, xzr, [x20, #0x68]
+ffffffc00818a16c: a905fe9f     	stp	xzr, xzr, [x20, #0x58]
+ffffffc00818a170: 39014288     	strb	w8, [x20, #0x50]
+ffffffc00818a174: f9003e9f     	str	xzr, [x20, #0x78]
+ffffffc00818a178: 940016d2     	bl	0xffffffc00818fcc0 <get_ucounts>
+ffffffc00818a17c: f9004a80     	str	x0, [x20, #0x90]
+ffffffc00818a180: b4000380     	cbz	x0, 0xffffffc00818a1f0 <prepare_kernel_cred+0x1fc>
+ffffffc00818a184: 52819802     	mov	w2, #0xcc0      // =3264
+ffffffc00818a188: aa1403e0     	mov	x0, x20
+ffffffc00818a18c: aa1303e1     	mov	x1, x19
+ffffffc00818a190: 72a00802     	movk	w2, #0x40, lsl #16
+ffffffc00818a194: 941c6f47     	bl	0xffffffc0088a5eb0 <security_prepare_creds>
+ffffffc00818a198: 37f802c0     	tbnz	w0, #0x1f, 0xffffffc00818a1f0 <prepare_kernel_cred+0x1fc>
+ffffffc00818a19c: 14000098     	b	0xffffffc00818a3fc <prepare_kernel_cred+0x408>
+ffffffc00818a1a0: 14000097     	b	0xffffffc00818a3fc <prepare_kernel_cred+0x408>
+ffffffc00818a1a4: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a1a8: 4b0803e8     	neg	w8, w8
+ffffffc00818a1ac: b8e80269     	ldaddal	w8, w9, [x19]
+ffffffc00818a1b0: 0b090108     	add	w8, w8, w9
+ffffffc00818a1b4: 35000908     	cbnz	w8, 0xffffffc00818a2d4 <prepare_kernel_cred+0x2e0>
+ffffffc00818a1b8: 88dffe68     	ldar	w8, [x19]
+ffffffc00818a1bc: 35001528     	cbnz	w8, 0xffffffc00818a460 <prepare_kernel_cred+0x46c>
+ffffffc00818a1c0: d5384108     	mrs	x8, SP_EL0
+ffffffc00818a1c4: f943cd09     	ldr	x9, [x8, #0x798]
+ffffffc00818a1c8: eb13013f     	cmp	x9, x19
+ffffffc00818a1cc: 540014c0     	b.eq	0xffffffc00818a464 <prepare_kernel_cred+0x470>
+ffffffc00818a1d0: f943c908     	ldr	x8, [x8, #0x790]
+ffffffc00818a1d4: eb13011f     	cmp	x8, x19
+ffffffc00818a1d8: 54001480     	b.eq	0xffffffc00818a468 <prepare_kernel_cred+0x474>
+ffffffc00818a1dc: b84a0e68     	ldr	w8, [x19, #0xa0]!
+ffffffc00818a1e0: 34000888     	cbz	w8, 0xffffffc00818a2f0 <prepare_kernel_cred+0x2fc>
+ffffffc00818a1e4: aa1303e0     	mov	x0, x19
+ffffffc00818a1e8: 97fffdba     	bl	0xffffffc0081898d0 <put_cred_rcu>
+ffffffc00818a1ec: 1400003a     	b	0xffffffc00818a2d4 <prepare_kernel_cred+0x2e0>
+ffffffc00818a1f0: 1400006f     	b	0xffffffc00818a3ac <prepare_kernel_cred+0x3b8>
+ffffffc00818a1f4: 1400006e     	b	0xffffffc00818a3ac <prepare_kernel_cred+0x3b8>
+ffffffc00818a1f8: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a1fc: 4b0803e8     	neg	w8, w8
+ffffffc00818a200: b8e80289     	ldaddal	w8, w9, [x20]
+ffffffc00818a204: 0b090108     	add	w8, w8, w9
+ffffffc00818a208: 350002c8     	cbnz	w8, 0xffffffc00818a260 <prepare_kernel_cred+0x26c>
+ffffffc00818a20c: 88dffe88     	ldar	w8, [x20]
+ffffffc00818a210: 350011c8     	cbnz	w8, 0xffffffc00818a448 <prepare_kernel_cred+0x454>
+ffffffc00818a214: d5384108     	mrs	x8, SP_EL0
+ffffffc00818a218: f943cd09     	ldr	x9, [x8, #0x798]
+ffffffc00818a21c: eb14013f     	cmp	x9, x20
+ffffffc00818a220: 54001160     	b.eq	0xffffffc00818a44c <prepare_kernel_cred+0x458>
+ffffffc00818a224: f943c908     	ldr	x8, [x8, #0x790]
+ffffffc00818a228: eb14011f     	cmp	x8, x20
+ffffffc00818a22c: 54001120     	b.eq	0xffffffc00818a450 <prepare_kernel_cred+0x45c>
+ffffffc00818a230: b94002a8     	ldr	w8, [x21]
+ffffffc00818a234: 34000088     	cbz	w8, 0xffffffc00818a244 <prepare_kernel_cred+0x250>
+ffffffc00818a238: aa1503e0     	mov	x0, x21
+ffffffc00818a23c: 97fffda5     	bl	0xffffffc0081898d0 <put_cred_rcu>
+ffffffc00818a240: 14000008     	b	0xffffffc00818a260 <prepare_kernel_cred+0x26c>
+ffffffc00818a244: 90014b88     	adrp	x8, 0xffffffc00aafa000 <nf_conntrack_locks+0x900>
+ffffffc00818a248: d000ae89     	adrp	x9, 0xffffffc00975c000 <ipip6_tunnel_uninit.cfi_jt>
+ffffffc00818a24c: 910f2129     	add	x9, x9, #0x3c8
+ffffffc00818a250: aa1503e0     	mov	x0, x21
+ffffffc00818a254: 91010121     	add	x1, x9, #0x40
+ffffffc00818a258: 39798102     	ldrb	w2, [x8, #0xe60]
+ffffffc00818a25c: 9402d856     	bl	0xffffffc0082403b4 <__call_rcu_common>
+ffffffc00818a260: 1400005d     	b	0xffffffc00818a3d4 <prepare_kernel_cred+0x3e0>
+ffffffc00818a264: 1400005c     	b	0xffffffc00818a3d4 <prepare_kernel_cred+0x3e0>
+ffffffc00818a268: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a26c: 4b0803e8     	neg	w8, w8
+ffffffc00818a270: b8e80269     	ldaddal	w8, w9, [x19]
+ffffffc00818a274: 0b090108     	add	w8, w8, w9
+ffffffc00818a278: 350002c8     	cbnz	w8, 0xffffffc00818a2d0 <prepare_kernel_cred+0x2dc>
+ffffffc00818a27c: 88dffe68     	ldar	w8, [x19]
+ffffffc00818a280: 35000ea8     	cbnz	w8, 0xffffffc00818a454 <prepare_kernel_cred+0x460>
+ffffffc00818a284: d5384108     	mrs	x8, SP_EL0
+ffffffc00818a288: f943cd09     	ldr	x9, [x8, #0x798]
+ffffffc00818a28c: eb13013f     	cmp	x9, x19
+ffffffc00818a290: 54000e40     	b.eq	0xffffffc00818a458 <prepare_kernel_cred+0x464>
+ffffffc00818a294: f943c908     	ldr	x8, [x8, #0x790]
+ffffffc00818a298: eb13011f     	cmp	x8, x19
+ffffffc00818a29c: 54000e00     	b.eq	0xffffffc00818a45c <prepare_kernel_cred+0x468>
+ffffffc00818a2a0: b84a0e68     	ldr	w8, [x19, #0xa0]!
+ffffffc00818a2a4: 34000088     	cbz	w8, 0xffffffc00818a2b4 <prepare_kernel_cred+0x2c0>
+ffffffc00818a2a8: aa1303e0     	mov	x0, x19
+ffffffc00818a2ac: 97fffd89     	bl	0xffffffc0081898d0 <put_cred_rcu>
+ffffffc00818a2b0: 14000008     	b	0xffffffc00818a2d0 <prepare_kernel_cred+0x2dc>
+ffffffc00818a2b4: 90014b88     	adrp	x8, 0xffffffc00aafa000 <nf_conntrack_locks+0x900>
+ffffffc00818a2b8: aa1303e0     	mov	x0, x19
+ffffffc00818a2bc: 39798102     	ldrb	w2, [x8, #0xe60]
+ffffffc00818a2c0: d000ae88     	adrp	x8, 0xffffffc00975c000 <ipip6_tunnel_uninit.cfi_jt>
+ffffffc00818a2c4: 910f2108     	add	x8, x8, #0x3c8
+ffffffc00818a2c8: 91010101     	add	x1, x8, #0x40
+ffffffc00818a2cc: 9402d83a     	bl	0xffffffc0082403b4 <__call_rcu_common>
+ffffffc00818a2d0: aa1f03f4     	mov	x20, xzr
+ffffffc00818a2d4: aa1403e0     	mov	x0, x20
+ffffffc00818a2d8: f9400bf5     	ldr	x21, [sp, #0x10]
+ffffffc00818a2dc: a9424ff4     	ldp	x20, x19, [sp, #0x20]
+ffffffc00818a2e0: a8c37bfd     	ldp	x29, x30, [sp], #0x30
+ffffffc00818a2e4: f85f8e5e     	ldr	x30, [x18, #-0x8]!
+ffffffc00818a2e8: d50323bf     	autiasp
+ffffffc00818a2ec: d65f03c0     	ret
+ffffffc00818a2f0: 90014b88     	adrp	x8, 0xffffffc00aafa000 <nf_conntrack_locks+0x900>
+ffffffc00818a2f4: aa1303e0     	mov	x0, x19
+ffffffc00818a2f8: 39798102     	ldrb	w2, [x8, #0xe60]
+ffffffc00818a2fc: d000ae88     	adrp	x8, 0xffffffc00975c000 <ipip6_tunnel_uninit.cfi_jt>
+ffffffc00818a300: 910f2108     	add	x8, x8, #0x3c8
+ffffffc00818a304: 91010101     	add	x1, x8, #0x40
+ffffffc00818a308: 9402d82b     	bl	0xffffffc0082403b4 <__call_rcu_common>
+ffffffc00818a30c: 17fffff2     	b	0xffffffc00818a2d4 <prepare_kernel_cred+0x2e0>
+ffffffc00818a310: 52b8000a     	mov	w10, #-0x40000000 // =-1073741824
+ffffffc00818a314: f0014c09     	adrp	x9, 0xffffffc00ab0d000 <neigh_sysctl_template+0x1a0>
+ffffffc00818a318: b900010a     	str	w10, [x8]
+ffffffc00818a31c: 396b3128     	ldrb	w8, [x9, #0xacc]
+ffffffc00818a320: 3707f168     	tbnz	w8, #0x0, 0xffffffc00818a14c <prepare_kernel_cred+0x158>
+ffffffc00818a324: 9000e720     	adrp	x0, 0xffffffc009e6e000 <max_tt_usecs+0x5d99>
+ffffffc00818a328: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a32c: 91261400     	add	x0, x0, #0x985
+ffffffc00818a330: 392b3128     	strb	w8, [x9, #0xacc]
+ffffffc00818a334: 97feb6a6     	bl	0xffffffc008137dcc <__warn_printk>
+ffffffc00818a338: d4210000     	brk	#0x800
+ffffffc00818a33c: 17ffff84     	b	0xffffffc00818a14c <prepare_kernel_cred+0x158>
+ffffffc00818a340: d4210000     	brk	#0x800
+ffffffc00818a344: d503249f     	bti	j
+ffffffc00818a348: f9800111     	prfm	pstl1strm, [x8]
+ffffffc00818a34c: 885f7d09     	ldxr	w9, [x8]
+ffffffc00818a350: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a354: 880b7d0a     	stxr	w11, w10, [x8]
+ffffffc00818a358: 35ffffab     	cbnz	w11, 0xffffffc00818a34c <prepare_kernel_cred+0x358>
+ffffffc00818a35c: 35ffef29     	cbnz	w9, 0xffffffc00818a140 <prepare_kernel_cred+0x14c>
+ffffffc00818a360: 52b8000a     	mov	w10, #-0x40000000 // =-1073741824
+ffffffc00818a364: f0014c09     	adrp	x9, 0xffffffc00ab0d000 <neigh_sysctl_template+0x1a0>
+ffffffc00818a368: b900010a     	str	w10, [x8]
+ffffffc00818a36c: 396b3528     	ldrb	w8, [x9, #0xacd]
+ffffffc00818a370: 3707eee8     	tbnz	w8, #0x0, 0xffffffc00818a14c <prepare_kernel_cred+0x158>
+ffffffc00818a374: f000e580     	adrp	x0, 0xffffffc009e3d000 <hci_reset_dev.hw_err+0xc0bc>
+ffffffc00818a378: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a37c: 910e1800     	add	x0, x0, #0x386
+ffffffc00818a380: 392b3528     	strb	w8, [x9, #0xacd]
+ffffffc00818a384: 97feb692     	bl	0xffffffc008137dcc <__warn_printk>
+ffffffc00818a388: d4210000     	brk	#0x800
+ffffffc00818a38c: 17ffff70     	b	0xffffffc00818a14c <prepare_kernel_cred+0x158>
+ffffffc00818a390: d503249f     	bti	j
+ffffffc00818a394: f9800111     	prfm	pstl1strm, [x8]
+ffffffc00818a398: 885f7d09     	ldxr	w9, [x8]
+ffffffc00818a39c: 11000529     	add	w9, w9, #0x1
+ffffffc00818a3a0: 880a7d09     	stxr	w10, w9, [x8]
+ffffffc00818a3a4: 35ffffaa     	cbnz	w10, 0xffffffc00818a398 <prepare_kernel_cred+0x3a4>
+ffffffc00818a3a8: 17ffff6e     	b	0xffffffc00818a160 <prepare_kernel_cred+0x16c>
+ffffffc00818a3ac: d503249f     	bti	j
+ffffffc00818a3b0: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a3b4: f9800291     	prfm	pstl1strm, [x20]
+ffffffc00818a3b8: 885f7e88     	ldxr	w8, [x20]
+ffffffc00818a3bc: 4b090108     	sub	w8, w8, w9
+ffffffc00818a3c0: 880afe88     	stlxr	w10, w8, [x20]
+ffffffc00818a3c4: 35ffffaa     	cbnz	w10, 0xffffffc00818a3b8 <prepare_kernel_cred+0x3c4>
+ffffffc00818a3c8: d5033bbf     	dmb	ish
+ffffffc00818a3cc: 35fff4a8     	cbnz	w8, 0xffffffc00818a260 <prepare_kernel_cred+0x26c>
+ffffffc00818a3d0: 17ffff8f     	b	0xffffffc00818a20c <prepare_kernel_cred+0x218>
+ffffffc00818a3d4: d503249f     	bti	j
+ffffffc00818a3d8: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a3dc: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818a3e0: 885f7e68     	ldxr	w8, [x19]
+ffffffc00818a3e4: 4b090108     	sub	w8, w8, w9
+ffffffc00818a3e8: 880afe68     	stlxr	w10, w8, [x19]
+ffffffc00818a3ec: 35ffffaa     	cbnz	w10, 0xffffffc00818a3e0 <prepare_kernel_cred+0x3ec>
+ffffffc00818a3f0: d5033bbf     	dmb	ish
+ffffffc00818a3f4: 35fff6e8     	cbnz	w8, 0xffffffc00818a2d0 <prepare_kernel_cred+0x2dc>
+ffffffc00818a3f8: 17ffffa1     	b	0xffffffc00818a27c <prepare_kernel_cred+0x288>
+ffffffc00818a3fc: d503249f     	bti	j
+ffffffc00818a400: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a404: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818a408: 885f7e68     	ldxr	w8, [x19]
+ffffffc00818a40c: 4b090108     	sub	w8, w8, w9
+ffffffc00818a410: 880afe68     	stlxr	w10, w8, [x19]
+ffffffc00818a414: 35ffffaa     	cbnz	w10, 0xffffffc00818a408 <prepare_kernel_cred+0x414>
+ffffffc00818a418: d5033bbf     	dmb	ish
+ffffffc00818a41c: 35fff5c8     	cbnz	w8, 0xffffffc00818a2d4 <prepare_kernel_cred+0x2e0>
+ffffffc00818a420: 17ffff66     	b	0xffffffc00818a1b8 <prepare_kernel_cred+0x1c4>
+ffffffc00818a424: d503249f     	bti	j
+ffffffc00818a428: f0015393     	adrp	x19, 0xffffffc00abfd000 <erofs_xattr_handlers+0x28>
+ffffffc00818a42c: 911a6273     	add	x19, x19, #0x698
+ffffffc00818a430: f9800271     	prfm	pstl1strm, [x19]
+ffffffc00818a434: 885f7e68     	ldxr	w8, [x19]
+ffffffc00818a438: 11000508     	add	w8, w8, #0x1
+ffffffc00818a43c: 88097e68     	stxr	w9, w8, [x19]
+ffffffc00818a440: 35ffffa9     	cbnz	w9, 0xffffffc00818a434 <prepare_kernel_cred+0x440>
+ffffffc00818a444: 17ffff31     	b	0xffffffc00818a108 <prepare_kernel_cred+0x114>
+ffffffc00818a448: d4210000     	brk	#0x800
+ffffffc00818a44c: d4210000     	brk	#0x800
+ffffffc00818a450: d4210000     	brk	#0x800
+ffffffc00818a454: d4210000     	brk	#0x800
+ffffffc00818a458: d4210000     	brk	#0x800
+ffffffc00818a45c: d4210000     	brk	#0x800
+ffffffc00818a460: d4210000     	brk	#0x800
+ffffffc00818a464: d4210000     	brk	#0x800
+ffffffc00818a468: d4210000     	brk	#0x800
+ffffffc00818a46c: b8bfc12a     	ldapr	w10, [x9]
+ffffffc00818a470: f8bfc153     	ldapr	x19, [x10]
+ffffffc00818a474: b8bfc26a     	ldapr	w10, [x19]
+ffffffc00818a478: b8bfc129     	ldapr	w9, [x9]
+ffffffc00818a47c: b8bfc129     	ldapr	w9, [x9]
+ffffffc00818a480: b8bfc268     	ldapr	w8, [x19]
+ffffffc00818a484: b8bfc288     	ldapr	w8, [x20]
+ffffffc00818a488: b8bfc268     	ldapr	w8, [x19]
+
+ffffffc00818a48c <prepare_creds>:
+ffffffc00818a48c: d503233f     	paciasp
+ffffffc00818a490: f800865e     	str	x30, [x18], #0x8
+ffffffc00818a494: a9be7bfd     	stp	x29, x30, [sp, #-0x20]!
+ffffffc00818a498: a9014ff4     	stp	x20, x19, [sp, #0x10]
+ffffffc00818a49c: 910003fd     	mov	x29, sp
+ffffffc00818a4a0: f0015e48     	adrp	x8, 0xffffffc00ad55000 <print_tainted.buf+0x18>
+ffffffc00818a4a4: 52819801     	mov	w1, #0xcc0      // =3264
+ffffffc00818a4a8: f944a500     	ldr	x0, [x8, #0x948]
+ffffffc00818a4ac: 940db28c     	bl	0xffffffc0084f6edc <kmem_cache_alloc>
+ffffffc00818a4b0: aa0003f3     	mov	x19, x0
+ffffffc00818a4b4: b40009c0     	cbz	x0, 0xffffffc00818a5ec <prepare_creds+0x160>
+ffffffc00818a4b8: d5384108     	mrs	x8, SP_EL0
+ffffffc00818a4bc: f943cd14     	ldr	x20, [x8, #0x798]
+ffffffc00818a4c0: aa1303e0     	mov	x0, x19
+ffffffc00818a4c4: 52801602     	mov	w2, #0xb0       // =176
+ffffffc00818a4c8: aa1403e1     	mov	x1, x20
+ffffffc00818a4cc: 97fa5949     	bl	0xffffffc0080209f0 <memmove>
+ffffffc00818a4d0: 52800028     	mov	w8, #0x1        // =1
+ffffffc00818a4d4: b900a27f     	str	wzr, [x19, #0xa0]
+ffffffc00818a4d8: b9000268     	str	w8, [x19]
+ffffffc00818a4dc: f9404e68     	ldr	x8, [x19, #0x98]
+ffffffc00818a4e0: 14000085     	b	0xffffffc00818a6f4 <prepare_creds+0x268>
+ffffffc00818a4e4: 14000084     	b	0xffffffc00818a6f4 <prepare_creds+0x268>
+ffffffc00818a4e8: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a4ec: b829011f     	stadd	w9, [x8]
+ffffffc00818a4f0: f9404268     	ldr	x8, [x19, #0x80]
+ffffffc00818a4f4: 14000087     	b	0xffffffc00818a710 <prepare_creds+0x284>
+ffffffc00818a4f8: 14000086     	b	0xffffffc00818a710 <prepare_creds+0x284>
+ffffffc00818a4fc: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a500: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a504: 34001149     	cbz	w9, 0xffffffc00818a72c <prepare_creds+0x2a0>
+ffffffc00818a508: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a50c: 2a090149     	orr	w9, w10, w9
+ffffffc00818a510: 37f807a9     	tbnz	w9, #0x1f, 0xffffffc00818a604 <prepare_creds+0x178>
+ffffffc00818a514: f9402e68     	ldr	x8, [x19, #0x58]
+ffffffc00818a518: b4000128     	cbz	x8, 0xffffffc00818a53c <prepare_creds+0xb0>
+ffffffc00818a51c: 14000090     	b	0xffffffc00818a75c <prepare_creds+0x2d0>
+ffffffc00818a520: 1400008f     	b	0xffffffc00818a75c <prepare_creds+0x2d0>
+ffffffc00818a524: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a528: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a52c: 34001269     	cbz	w9, 0xffffffc00818a778 <prepare_creds+0x2ec>
+ffffffc00818a530: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a534: 2a090149     	orr	w9, w10, w9
+ffffffc00818a538: 37f807e9     	tbnz	w9, #0x1f, 0xffffffc00818a634 <prepare_creds+0x1a8>
+ffffffc00818a53c: f9403268     	ldr	x8, [x19, #0x60]
+ffffffc00818a540: b4000128     	cbz	x8, 0xffffffc00818a564 <prepare_creds+0xd8>
+ffffffc00818a544: 14000099     	b	0xffffffc00818a7a8 <prepare_creds+0x31c>
+ffffffc00818a548: 14000098     	b	0xffffffc00818a7a8 <prepare_creds+0x31c>
+ffffffc00818a54c: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a550: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a554: 34001389     	cbz	w9, 0xffffffc00818a7c4 <prepare_creds+0x338>
+ffffffc00818a558: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a55c: 2a090149     	orr	w9, w10, w9
+ffffffc00818a560: 37f80829     	tbnz	w9, #0x1f, 0xffffffc00818a664 <prepare_creds+0x1d8>
+ffffffc00818a564: f9403668     	ldr	x8, [x19, #0x68]
+ffffffc00818a568: b4000128     	cbz	x8, 0xffffffc00818a58c <prepare_creds+0x100>
+ffffffc00818a56c: 140000a2     	b	0xffffffc00818a7f4 <prepare_creds+0x368>
+ffffffc00818a570: 140000a1     	b	0xffffffc00818a7f4 <prepare_creds+0x368>
+ffffffc00818a574: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a578: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a57c: 340014a9     	cbz	w9, 0xffffffc00818a810 <prepare_creds+0x384>
+ffffffc00818a580: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a584: 2a090149     	orr	w9, w10, w9
+ffffffc00818a588: 37f80869     	tbnz	w9, #0x1f, 0xffffffc00818a694 <prepare_creds+0x208>
+ffffffc00818a58c: f9403a68     	ldr	x8, [x19, #0x70]
+ffffffc00818a590: b4000128     	cbz	x8, 0xffffffc00818a5b4 <prepare_creds+0x128>
+ffffffc00818a594: 140000ab     	b	0xffffffc00818a840 <prepare_creds+0x3b4>
+ffffffc00818a598: 140000aa     	b	0xffffffc00818a840 <prepare_creds+0x3b4>
+ffffffc00818a59c: 52800029     	mov	w9, #0x1        // =1
+ffffffc00818a5a0: b8290109     	ldadd	w9, w9, [x8]
+ffffffc00818a5a4: 340015c9     	cbz	w9, 0xffffffc00818a85c <prepare_creds+0x3d0>
+ffffffc00818a5a8: 1100052a     	add	w10, w9, #0x1
+ffffffc00818a5ac: 2a090149     	orr	w9, w10, w9
+ffffffc00818a5b0: 37f808a9     	tbnz	w9, #0x1f, 0xffffffc00818a6c4 <prepare_creds+0x238>
+ffffffc00818a5b4: f9404a60     	ldr	x0, [x19, #0x90]
+ffffffc00818a5b8: f9003e7f     	str	xzr, [x19, #0x78]
+ffffffc00818a5bc: 940015c1     	bl	0xffffffc00818fcc0 <get_ucounts>
+ffffffc00818a5c0: f9004a60     	str	x0, [x19, #0x90]
+ffffffc00818a5c4: b40000e0     	cbz	x0, 0xffffffc00818a5e0 <prepare_creds+0x154>
+ffffffc00818a5c8: 52819802     	mov	w2, #0xcc0      // =3264
+ffffffc00818a5cc: aa1303e0     	mov	x0, x19
+ffffffc00818a5d0: aa1403e1     	mov	x1, x20
+ffffffc00818a5d4: 72a00802     	movk	w2, #0x40, lsl #16
+ffffffc00818a5d8: 941c6e36     	bl	0xffffffc0088a5eb0 <security_prepare_creds>
+ffffffc00818a5dc: 36f80080     	tbz	w0, #0x1f, 0xffffffc00818a5ec <prepare_creds+0x160>
+ffffffc00818a5e0: aa1303e0     	mov	x0, x19
+ffffffc00818a5e4: 940000aa     	bl	0xffffffc00818a88c <abort_creds>
+ffffffc00818a5e8: aa1f03f3     	mov	x19, xzr
+ffffffc00818a5ec: aa1303e0     	mov	x0, x19
+ffffffc00818a5f0: a9414ff4     	ldp	x20, x19, [sp, #0x10]
+ffffffc00818a5f4: a8c27bfd     	ldp	x29, x30, [sp], #0x20
+ffffffc00818a5f8: f85f8e5e     	ldr	x30, [x18, #-0x8]!
+ffffffc00818a5fc: d50323bf     	autiasp
