@@ -1,0 +1,13 @@
+# Local / private material — never push to GitHub
+local-other/
+# exploit-pselect/runlogs
+# exploit-mcast/runlogs
+# poc_air/runlogs
+
+poc_air/CONTEXT.md
+exploit-mcast/CONTEXT.md
+exploit-pselect/CONTEXT.md
+
+# Editor / OS noise
+*.swp
+.DS_Store

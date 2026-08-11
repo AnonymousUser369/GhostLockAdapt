@@ -1,0 +1,17 @@
+[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=sendmsg
+[kaslr] perf text-base=ffffffedcce00000 min_kip=ffffffedccea20a0 samples=18
+[kaslr] base=0xffffffedcce00000 slide=0x2dc4e00000
+  init_task   = 0xffffffedd7a43640
+  selinux_state = 0xffffffedd7ba9d78 (enforcing @ +0)
+  fake_lock   = 0xffffffedd7bca880 (uid_lock+0x200, ZEROED BSS rt_mutex)
+  fake_lock2  = 0xffffffedd7bca980 (uid_lock+0x300, ZEROED BSS rt_mutex)
+  safe_write  = 0xffffffedd7b53000 (empty_zero_page: low byte 0x00, byte2 0x53)
+[Y] tid=1441
+[X] tid=1443
+[main] topology ready; FUTEX_CMP_REQUEUE_PI(cond) -> cycle
+[main] CMP_REQUEUE_PI returned -35 (Resource deadlock would occur)
+[main] -EDEADLK: full chainwalk caught PI cycle
+[Y] PROBE spray: DISTINCT sentinels base=SENT(100+i) len=SENT(200+i) in all 8 iovs; lock LEFT as sentinel so walk faults at first lock deref. Panic FAR/x27 = the sentinel value at the lock field -> pins base-vs-len AND the iov index of the lock field (i.e. the displacement D).
+[Y] SPRAY-DEBUG iovstack base=0x274070  &iov[4]=0x2740b0  method=sendmsg
+[Z] tid=1449
+[Z] FUTEX_LOCK_PI(L2): walk into pi_blocked_on

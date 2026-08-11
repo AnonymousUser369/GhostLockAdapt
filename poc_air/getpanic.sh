@@ -11,16 +11,21 @@ TMP=$(mktemp /tmp/gl_ramoops.XXXXXX.txt)
 cd "$DIR" || exit 1
 mkdir -p "$LOGDIR"
 
-adb wait-for-device 2>/dev/null
-adb shell "echo up" >/dev/null 2>&1
-sleep 1
 echo "[*] pull /sys/fs/pstore/console-ramoops-0"
 adb shell "cat /sys/fs/pstore/console-ramoops-0" > "$TMP" 2>/dev/null
 echo "[*] extract panic (from first 'Unable to handle') -> $PAN"
 awk '/Unable to handle/{f=1} f{print}' "$TMP" > "$PAN"
 rm -f "$TMP"
 echo "[*] panic summary:"
-grep -nE "Unable to handle|pc :|rt_mutex_adjust_prio|adjust_pi|sched_setscheduler|Oops|Call trace|Kernel Offset|x27| x19" "$PAN" | head -25
+grep -nE "Unable to handle|pc :|rt_mutex_adjust_prio|adjust_pi|sched_setscheduler|Oops|Call trace|Kernel Offset" "$PAN" | head -25
+echo "[*] all registers:"
+grep -E "x[0-9]+:|sp :|lr :|pc :" "$PAN" | head -40
+echo "[*] sentinel hunt (0xabcdef00xx):"
+grep -oE "0xabcdef00[0-9a-f]{2}" "$PAN" | sort | uniq -c | sort -rn | head -20
+echo "[*] x27 / x19 (waiter lock / waiter base):"
+grep -E "x27:|x19:" "$PAN" | head -10
+echo "[*] fault address (virtual address line):"
+grep -E "virtual address|\[ffffff" "$PAN" | head -5
 
 LATEST=$(ls -t "$LOGDIR"/run_*.out 2>/dev/null | head -1)
 if [ -n "$LATEST" ]; then

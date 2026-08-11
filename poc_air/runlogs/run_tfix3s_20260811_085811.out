@@ -1,0 +1,17 @@
+[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=sendmsg
+[kaslr] tracefs base=ffffffd832600000 slide=000000182a600000 (mode cnt 3768, samples 4096)
+[kaslr] base=0xffffffd832600000 slide=0x182a600000
+  init_task   = 0xffffffd83d243640
+  selinux_state = 0xffffffd83d3a9d78 (enforcing @ +0)
+  fake_lock   = 0xffffffd83d3a9d78 (uid_lock+0x200, ZEROED BSS rt_mutex)
+  fake_lock2  = 0xffffffd83d3a9d78 (uid_lock+0x300, ZEROED BSS rt_mutex)
+  safe_write  = 0xffffffd83d353000 (empty_zero_page: low byte 0x00, byte2 0x53)
+[Y] tid=15674
+[X] tid=15675
+[main] topology ready; FUTEX_CMP_REQUEUE_PI(cond) -> cycle
+[main] CMP_REQUEUE_PI returned -35 (Resource deadlock would occur)
+[main] -EDEADLK: full chainwalk caught PI cycle
+[Y] PHASE1 spray: settle ghost (d=0 method=sendmsg: li=0 parent@iov0..2)
+[Y] SPRAY-DEBUG iovstack base=0x278080  &iov[4]=0x2780c0  method=sendmsg
+[Z] tid=15676
+[Z] FUTEX_LOCK_PI(L2): walk into pi_blocked_on

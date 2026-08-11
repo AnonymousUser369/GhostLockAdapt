@@ -140,7 +140,7 @@
  * production layout -- NOT the legacy/6.x rt_waiter_node.prio variant. Real
  * field offsets CONFIRMED via disassembly (2026-08-07): wake_state@0x40,
  * prio@0x44, deadline@0x48, ww_ctx@0x50. See
- * exploit-exp32/docs/waiter_field_offsets_5-15-180.md. */
+ * Target/waiter_field_offsets_5-15-180.md. */
 #define FAKE_WAITER_TREE_ENTRY_OFF 0x00     /* rb_node: 0x00,0x08,0x10 */
 #define FAKE_WAITER_PI_TREE_ENTRY_OFF 0x18  /* rb_node: 0x18,0x20,0x28 */
 #define FAKE_WAITER_TASK_OFF 0x30
@@ -150,7 +150,7 @@
  * wake_state@0x40, prio@0x44, deadline@0x48, ww_ctx@0x50 (single prio/deadline,
  * NOT the legacy tree/pi_tree split). TREE_PRIO/PI_TREE_PRIO both map to prio@0x44;
  * TREE_DEADLINE/PI_TREE_DEADLINE both map to deadline@0x48. See
- * exploit-exp32/docs/waiter_field_offsets_5-15-180.md. */
+ * Target/waiter_field_offsets_5-15-180.md. */
 #define FAKE_WAITER_TREE_PRIO_OFF 0x44      /* prio (compact single field) */
 #define FAKE_WAITER_TREE_DEADLINE_OFF 0x48  /* deadline */
 #define FAKE_WAITER_PI_TREE_PRIO_OFF 0x44   /* prio (compact single field) */

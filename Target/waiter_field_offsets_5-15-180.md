@@ -74,7 +74,7 @@ the double-write is redundant but harmless.
 - `exploit-pselect`: pivot sprays waiter fields via fd_set (`word8 -> waiter+0x40`),
   so stack positions were already correct; this fixes the skb fake-page layout
   used by the physrw/fops stage.
-- `exploit-exp32`: fixes the skb fake-waiter page (route is frame-gap blocked, so
+- `exploit-mcast`: fixes the skb fake-waiter page (route is frame-gap blocked, so
   currently moot).
 - `poc_air`: unaffected (sprays inline, never builds a fake-page waiter).
 - `pi_top_task@0x8b0` / `pi_blocked_on@0x8a0` were already disassembly-confirmed

@@ -32,7 +32,4 @@ Every `target.h` `*_OFF` symbol constant was recomputed from the live symbol tab
 
 ## Conclusion
 ALL `target.h` symbol `*_OFF` constants are CORRECT for the production 5.15.180
-build. Therefore the exp32 reboot is NOT caused by bad symbol base/addresses.
-The defect is purely the **rt_mutex_waiter field-offset mapping** (5.15 moved
-task@0x50/lock@0x58, i.e. payload words 10/11; airfork currently puts them at
-words 6/7 = waiter+0x30/0x38). See frame_analysis_exp32.md section 4-5.
+build.

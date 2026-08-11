@@ -1,6 +1,6 @@
 # Offset verification proof
 
-All offsets used in `exploit-pselect` / `exploit-exp32` `target.h` are verified
+All offsets used in `exploit-pselect` / `exploit-mcast` `target.h` are verified
 against the **production** POCO air 5.15.180 kernel (`Target/kernel_5-15-180*`),
 NOT the debug kernel (`gki_debugkernel_*`). The debug kernel has
 `CONFIG_DEBUG_RT_MUTEXES=y` which adds debug fields and shifts struct layouts —

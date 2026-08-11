@@ -22,7 +22,7 @@ adb push poc_air /data/local/tmp/poc_air_$TAG || { echo "[!] push failed"; exit 
 adb shell chmod 755 /data/local/tmp/poc_air_$TAG
 
 echo "[*] run ($ENV)"
-( eval "$ENV" ; timeout 30 adb exec-out "cd /data/local/tmp && ./poc_air_$TAG 2>&1 | tee poc_air_${TAG}.log; echo ENFORCE=\$(getenforce)" ) > "$OUT" 2>&1
+( eval "$ENV" ; timeout 30 adb exec-out "cd /data/local/tmp && ${ENV} ./poc_air_$TAG 2>&1 | tee poc_air_${TAG}.log; echo ENFORCE=\$(getenforce)" ) > "$OUT" 2>&1
 echo "EXIT=$?" >> "$OUT"
 echo "[*] saved run -> $OUT"
 cat "$OUT"
