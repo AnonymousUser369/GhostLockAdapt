@@ -1,0 +1,5 @@
+[1;30m[~][0m tgid=10762
+[1;36m[*][0m g_iov_idx=0 spray=sendmsg
+[1;33m[!][0m no sched_blocked_reason samples
+[1;31m[-][0m FATAL: tracefs leak failed
+EXIT=0

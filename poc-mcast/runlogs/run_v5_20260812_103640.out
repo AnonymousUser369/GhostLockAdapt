@@ -1,0 +1,18 @@
+[1;30m[~][0m tgid=9340
+[1;36m[*][0m g_iov_idx=0 spray=sendmsg
+[1;36m[*][0m tracefs base=ffffffefd7000000 slide=0000002fcf000000 (mode cnt 1927, samples 4096, candidate #0 mode=ffffffefd7178510)
+[1;36m[*][0m KASLR: base=0xffffffefd7000000 slide=0x2fcf000000
+[1;36m[*][0m selinux_state = 0xffffffefe1da9d78
+[1;36m[*][0m init_task     = 0xffffffefe1c43640
+[1;36m[*][0m fake base     = posix_timers_hashtable + 0x200
+[1;36m[*][0m fake_lock     = 0xffffffefe1d7c978
+[1;36m[*][0m fake_lock2    = 0xffffffefe1d7c9f8
+[1;36m[*][0m safe_write    = 0xffffffefe1d53000 (empty_zero_page)
+[1;36m[*][0m val2mb        = 0xffffffefd9800000 (2MB-aligned)
+[1;30m[~][0m Y tid=9342
+[1;30m[~][0m X tid=9343
+[1;30m[~][0m topology ready; CMP_REQUEUE_PI(cond) -> cycle
+[1;30m[~][0m CMP_REQUEUE_PI returned -35
+[1;32m[+][0m -EDEADLK: full chain walk caught PI cycle
+[1;30m[~][0m phase1: sched_setscheduler(Y) -> settle ghost
+EXIT=0

@@ -1,10 +1,13 @@
 # Local / private material — never push to GitHub
 local-other/
+backup/
 # exploit-pselect/runlogs
 # exploit-mcast/runlogs
 # poc_air/runlogs
 
+CONTEXT.md
 poc_air/CONTEXT.md
+poc-mcast/CONTEXT.md
 exploit-mcast/CONTEXT.md
 exploit-pselect/CONTEXT.md
 
