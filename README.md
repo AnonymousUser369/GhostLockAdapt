@@ -35,7 +35,7 @@ proved the entry primitive + selinux-permissive flip. `exploit-finale` is
 
 ---
 
-## 1. Basic GhostLock info
+## 2. Basic GhostLock info
 
 ### The exploit primitive (shared by all variants)
 
@@ -87,7 +87,7 @@ waiter->lock`).
 
 ---
 
-## 2. Exploit-finale — STALLED / inactive reference
+## 3. Exploit-finale — STALLED / inactive reference
 
 > **STATUS (2026-08-20): STALLED.** On POCO air 5.15.180 none of its four stamp
 > writers landed (`x27=0` for mcast/mcast6/sendmsg/sigreturn) and its configfs
@@ -139,61 +139,8 @@ timing diagram. `docs/WRITE-PRIMITIVES.md` covers both stamps. `docs/KASLR-METHO
 covers all three leak methods. `docs/ESCALATION.md` covers root. `docs/FAKE-FOPS.md`
 documents the bypassed CFI route for reference.
 
----
 
-## 3. The shared primitive — what the research variants proved
-
-The exploit primitive is the same across all variants:
-
-1. **KASLR leak.** The kernel text base is recovered at runtime. All variants
-   use the **tracefs `sched_blocked_reason` leak** (event id 108, modal `caller`
-   @ offset 16; `perf_event_paranoid = -1` on POCO, so it is allowed), with the
-   perf-event leak and the boot_id/slide leak as fallbacks. `KIMAGE_TEXT_BASE =
-0xffffffc008000000`; runtime VA = `base + slide + link_off`.
-2. **PI-cycle topology.** Two threads build a futex PI deadlock cycle
-   (`-EDEADLK` via `FUTEX_CMP_REQUEUE_PI`) that leaves a `rt_mutex_waiter`
-   dangling on the _waiter_ thread's kernel stack (`current->pi_blocked_on`
-   points at it). That waiter is the corruption target.
-3. **Stack overwrite.** A _second_ syscall copies attacker bytes into its own
-   kernel-stack frame in a position that **coincides** with the dangling waiter.
-   The bytes fake `waiter.task` / `waiter.lock` so the next
-   `rt_mutex_adjust_prio_chain` (triggered by the consumer's
-   `sched_setattr`/`sched_setscheduler`) walks into a fake object.
-4. **physrw + root.** On POCO the configfs ashmem repoint feature is absent, so
-   the **configfs-based** physrw path is dead. The working escalation is the `rt_mutex`
-   `rb_erase` forge — a single controlled 8-byte UAF write via the
-   `rt_mutex_adjust_prio_chain` walk — that patches `selinux_state->enforcing`
-   and `cred`.
-
-### The 5.15.180 landscape — the shared blocker
-
-The whole exploit hinges on **step 3**: the second syscall's stack frame must
-_coincide_ in address with the dangling waiter. This is a per-boot,
-per-thread **frame-offset coincidence**, not a total call-depth issue.
-
-- `rt_mutex_waiter` on 5.15.180 GKI is **compact**: `task @ +0x30`,
-  `lock @ +0x38` (authoritative offsets in
-  `Target/manual_offsets_5-15-180.md`; confirmed by
-  `task_blocks_on_rt_mutex` disassembly). Earlier notes claiming
-  `task@0x50/lock@0x58` are **outdated** — see `PATHS.md` §"Flagged
-  contradictions".
-- `rt_mutex_adjust_prio_chain` prologue (5.15.180): `x19 = x0` = the **task**
-  (1st arg), `x28 = task->0x8b0` = `task->pi_top_task` = the dangling waiter,
-  and the fault at `+0x1b0` dereferences `*(waiter->lock)` (i.e. `x27 =
-waiter->lock`).
-- The "frame-gap" that blocks one technique is **technique-specific**: it
-  depends on the distance between the futex frame and the _specific_ overwrite
-  syscall's frame. Different syscalls → different gaps.
-
-### Common constraints
-
-- `randomize_kstack_offset` is **off** on this GKI build → displacement is
-  deterministic per-boot (not parity-limited).
-- `CONFIG_DEBUG_RT_MUTEXES` is **not** set; `CONFIG_ANDROID_BINDER_IPC=y`.
-
----
-
-## 3. Build & run
+## 4. Build & run
 
 <details>
 <summary>Expand for build & run instructions (device-specific, reboot required)</summary>
@@ -246,7 +193,7 @@ cd exploit-pselect
 
 ---
 
-## 4. External links & references
+## 5. External links & references
 
 Public / upstream repositories used during this work:
 
@@ -259,7 +206,7 @@ Public / upstream repositories used during this work:
   frame-gap proof: https://github.com/pubglite55/oppo-ghostlock
 - probably more
 
-## 5. Documentation
+## 6. Documentation
 
 - `exploit-finale/docs/EXPLOIT-PATH.md` — end-to-end execution trace with ASCII
   timing diagram
