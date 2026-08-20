@@ -232,5 +232,5 @@ This discipline is correct (X-15 Bug #2 does not apply).
 | ksym_table offset bug | ✅ fixed | Was +0x8000000 too high for BSS/DATA; now (link - 0xffffffc008000000) |
 | `rt_mutex_top_waiter` BUG @ rtmutex_common.h:118 | ✅ understood | Fires when fake_lock2 has garbage waiters; clean anchor avoids it |
 | Ghost-write writes node address, not value | ✅ confirmed | Disassembly: `str x28,[x11]` writes waiter stack addr; `rb_right` overwritten to 0 |
-| Ghost-write selinux flip on POCO | ❌ unreliable | Node addr byte0 ≠ 0 on POCO; reference works on FZF5 by luck |
-| Pipe-based physrw selinux flip | ⏳ pending | Reference: `exploit-pselect/src/pipe.c` (`pipe_phys_read_data`/`pipe_phys_write_data`) |
+| Ghost-write selinux flip on POCO | ✅ PROVEN | `ghost_write_value` → `rb_erase` forge; run `p1c` flips `selinux_state.enforcing` to 0 (live `/sys/fs/selinux/enforce`=0) |
+| Pipe-based physrw selinux flip | ❌ dead on POCO | configfs ashmem repoint absent on POCO; reference `exploit-pselect` is archived in `backup/` |

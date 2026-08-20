@@ -43,7 +43,7 @@ adb shell cat /sys/fs/selinux/enforce   # expect 0
 ```
 
 Key env vars:
-- `IOV_IDX=d` — spray displacement (0–7). Controls which iov slot maps to `waiter->lock`. **On POCO 5.15.180 the iovec spray overlaps the freed waiter with a +0x38 displacement, so `iov[0]` = `waiter->lock` (+0x38). The `li` (lock slot) MUST be `0` (write `fake_lock` into `iov[0]`), NOT `3` as in the a54x reference. `tree_entry`/`task` (+0x00..+0x37) are NOT covered by `iov[0..]` under this displacement — PHASE2 RB-tree targets need re-mapping.** See `docs/OBSERVATIONS.md` "CORRECTED mapping".
+- `IOV_IDX=d` — spray displacement (0–7). Controls which iov slot maps to `waiter->lock`. **On POCO 5.15.180 the iovec spray overlaps the freed waiter with a +0x38 displacement to the lock field (i.e. `iov[0].iov_base` = `task`@+0x30, `iov[0].iov_len` = `lock`@+0x38). The `li` (lock slot) MUST be `0` (write `fake_lock` into `iov[0]`), NOT `3` as in the a54x reference. `tree_entry`/`task` (+0x00..+0x37) are NOT covered by `iov[0..]` under this displacement — PHASE2 RB-tree targets need re-mapping.** See `docs/OBSERVATIONS.md` "CORRECTED mapping".
 - `PROBE=1` — sprays valid sentinel values `0xabcdef00|i<<8` in all waiter fields except `lock=fake_lock` and `task=init_task`. Runs full two-phase (settle + write); panic contains sentinel `0xabcdef00xx` patterns revealing the iov→field mapping. `enforce=0` confirms success directly.
 - `SPRAY=writev` — alternate spray via `writev` instead of `sendmmsg` (experimental).
 - `SAFE_WRITE=1` — write `empty_zero_page` (low byte 0x00, byte2 nonzero) instead of raw NULL, keeping `selinux_state->initialized=1`. Enabled by default in v2.
@@ -59,8 +59,8 @@ Key env vars:
 | `sendmmsg` iovec spray co-locates with freed `rt_mutex_waiter` (`iov[0]`=`lock`, +0x38 displacement) | ✅ confirmed |
 | `pselect6` fd_set spray | ❌ ruled out (5.15 doesn't work) |
 | Static `fake_lock` anchor (`uid_lock+0x200`, `selinux_state`, `init_task`, `kmalloc_caches`, `security_hook_heads`, …) | ❌ ALL fault (`pmd=0`/`pgd=0`) — no image `.data`/`.bss`/GAP symbol is mapped at the vmlinux-predicted VA on this build |
-| rt_mutex `rb_erase` selinux forge (`PHASE2`) | ⛔ blocked — abandoned; `tree_entry` (+0x00..+0x37) also unreachable under the +0x38 spray |
-| **Pivot → physrw primitive** (exploit-pselect / CVE-2026-43499) | 🔄 in progress — arbitrary physical RW replaces the `rt_mutex` fake_lock / selinux-forge stage; the UAF + `sendmmsg` spray + tracefs KASLR are retained as the entry primitive |
+| rt_mutex `rb_erase` selinux forge (`PHASE2`) | ⏳ pursued — `tree_entry` (+0x00..+0x37) unreachable under `sendmsg` D=+0x38 (Blocker B); solvable via the MCAST stamp from `poc-mcast` |
+| Pipe-buffer / DirtyPipe route | ⏳ pursued — configfs ashmem repoint is absent on POCO, but a configfs-free pipe-buffer forge is a live alternative escalation |
 
 ---
 

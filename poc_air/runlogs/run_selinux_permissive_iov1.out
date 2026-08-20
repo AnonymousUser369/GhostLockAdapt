@@ -1,3 +1,0 @@
-[1;36m[*][0m iov mapping: parent_color@iov[1], task/lock@iov[4]
-[1;36m[*][0m perf text-base=ffffffe383400000 min_kip=ffffffe3834a20a0 samples=8
-[1;36m[*][0m KASLR: base=0xffffffe383400000 slide=0x237b400000

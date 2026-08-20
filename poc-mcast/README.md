@@ -7,10 +7,11 @@ Standalone test of the **IPv4 UDP** MCAST stack-stamp path (`AF_INET` + `SOCK_DG
 `ghostlock-refs-1/mcast_permissive.c`.
 
 **Current status:** stamp confirmed landing (`WAITER_OFF=0x60`, phase1 settles
-cleanly). The mcast ghost-write is **unreliable for selinux flip on POCO** because
-the rbtree insert writes Y's kernel-stack address (not the stamped value); enforcing
-flips only if that address has byte0=0, which POCO does not satisfy. Pivoting to
-**pipe-based physrw** (`exploit-pselect` reference) for the actual write.
+cleanly) and the **selinux-permissive flip is PROVEN on POCO** via the `rb_erase`
+forge (`ghost_write_value` writes `empty_zero_page` to `selinux_state.enforcing`;
+run `p1c`, live `/sys/fs/selinux/enforce` read = 0). The working escalation on
+POCO is the `rt_mutex` `rb_erase` forge (not configfs physrw — that feature is
+absent on POCO). Full-root `cred` patching is pursued in `poc-mcast-root`.
 
 ---
 
@@ -62,8 +63,8 @@ Key env vars:
 | ksym_table offset bug | ✅ fixed (was +0x8000000 too high for BSS/DATA) |
 | `rt_mutex_top_waiter` BUG (dirty fake_lock2) | ✅ fixed via clean anchor |
 | `getpanic.sh` BUG capture | ✅ updated |
-| Ghost-write selinux flip | ❌ unreliable on POCO (writes node addr, byte0≠0) |
-| Pipe-based physrw selinux flip | ⏳ pending (reference: `exploit-pselect`) |
+| Ghost-write selinux flip (rb_erase forge) | ✅ PROVEN on POCO (run `p1c`) |
+| Full-root cred patch | ⏳ pursued in `poc-mcast-root` |
 
 ---
 
@@ -79,7 +80,7 @@ Key env vars:
 | `docs/OBSERVATIONS.md` | Run log + offset derivation |
 | `CONTEXT.md` | Local analysis (this workspace) |
 | `runlogs/` | Per-run output |
-| `exploit-pselect/` | Reference physrw primitive (`pipe_phys_read_data`/`pipe_phys_write_data`) |
+| `exploit-pselect/` | Reference physrw primitive (`pipe_phys_read_data`/`pipe_phys_write_data`) — **archived in `backup/`; configfs physrw dead on POCO** |
 
 ---
 

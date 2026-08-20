@@ -4,7 +4,7 @@
 a futex priority-inheritance UAF. The kernel leaves a `struct rt_mutex_waiter` dangling
 on a kernel stack after a `FUTEX_CMP_REQUEUE_PI` / PI-cycle (`FUTEX_WAIT_REQUEUE_PI` +
 `FUTEX_CMP_REQUEUE_PI`) race. An unprivileged adb shell can
-then overwrite that waiter — which lives in *attacker-reachable* kernel-stack
+then overwrite that waiter — which lives in _attacker-reachable_ kernel-stack
 memory — with fake fields, redirecting the kernel's `rt_mutex_adjust_prio_chain`
 walk into attacker-controlled memory. That yields an arbitrary kernel
 read/write primitive, which is used to patch `cred` (uid/gid → 0, full caps)
@@ -19,44 +19,50 @@ Work done by AI since its beyond what i could ever do 😅
 
 ## 1. Variant status
 
-| Variant | Status | Role |
-|---|---|---|
-| [`exploit-finale/`](exploit-finale/) | **Primary — working** | Full LPE. Combines tracefs KASLR, UAF stamp (mcast/sendmsg), PI-walk consumer, pipe physrw, and embedded su daemon. This is the active development target. |
-| [`poc_air/`](poc_air/) | **Partial success** | Proved the `sendmmsg` iovec spray lands on the dangling waiter (`iov[0]` = `waiter->lock`, +0x38 displacement). Could not reach root because every static kernel-symbol `fake_lock` candidate faults (`pmd=0`/`pgd=0`) on POCO 5.15.180. Pivoted to physrw concept; its probe methodology and spray layout are reused in `exploit-finale`. |
-| [`poc-mcast/`](poc-mcast/) | **Partial success** | Proved the IPv4 `MCAST_BLOCK_SOURCE` setsockopt stamp works and derived `WAITER_OFF = 0x60` via PROBE. Did not implement escalation. Its probe methodology, frame analysis, and stamp layout are reused in `exploit-finale`. |
-| [`exploit-mcast/`](exploit-mcast/) | **Failed** | Native 64-bit arm64 `MCAST_JOIN_SOURCE_GROUP` writer. The 0x108 copy is geometrically insufficient on POCO 5.15.180 (waiter sits outside the copy window). Kept for reference only. |
-| [`exploit-pselect/`](exploit-pselect/) | **Failed** | Port of zainarbani a54x `COMPACT_RT_MUTEX_WAITER` pselect layout. Structurally sound but the pselect fd_set spray does not reliably trigger the CFI misroute on POCO 5.15.180. Superseded by `exploit-finale`'s pipe-based physrw, which achieves the same arbitrary R/W without depending on CFI. Kept for reference only. |
+| Variant                                | Status                           | Role                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`exploit-finale/`](exploit-finale/)   | **STALLED** (inactive reference) | Full LPE. Combines tracefs KASLR, UAF stamp (mcast/sendmsg), PI-walk consumer, pipe physrw, and embedded su daemon. STALLED: none of its 4 stamp writers landed on POCO (`x27=0` for mcast/mcast6/sendmsg/sigreturn) and its configfs ashmem physrw escalation is dead (repoint feature absent). Inactive reference only.                                                                                                             |
+| [`poc_air/`](poc_air/)                 | **Partial success**              | Proved the `sendmmsg` iovec spray lands on the dangling waiter (`iov[0]` = `waiter->lock`, +0x38 displacement). Could not reach root because every static kernel-symbol `fake_lock` candidate faults (`pmd=0`/`pgd=0`) on POCO 5.15.180. Both the `rb_erase` forge and the pipe-buffer route are pursued escalation avenues (configfs physrw is dead on POCO); its probe methodology and spray layout are reused in `exploit-finale`. |
+| [`poc-mcast/`](poc-mcast/)             | **Partial success**              | Proved the IPv4 `MCAST_BLOCK_SOURCE` setsockopt stamp works and derived `WAITER_OFF = 0x60` via PROBE, and **proved the selinux-permissive flip** via the `rb_erase` forge (run `p1c`). Clean-exit deadlock on POCO is the remaining blocker.                                                                                                                                                                                         |
+| [`poc-mcast-root/`](poc-mcast-root/)   | **Active — full root**           | Full-root pursuit deriving from `poc_mcastv2`. Proven IPv4 `MCAST_BLOCK_SOURCE` stamp (`WAITER_OFF=0x60`) flips selinux permissive; extends the `rb_erase` forge to patch `cred` for full root. Clean-exit / device-usability is the open blocker.                                                                                                                                                                                    |
+| [`exploit-mcast/`](exploit-mcast/)     | **Archived**                     | Native 64-bit arm64 `MCAST_JOIN_SOURCE_GROUP` writer. The 0x108 copy is geometrically insufficient on POCO 5.15.180 (waiter sits outside the copy window). Archived in `backup/` (no value).                                                                                                                                                                                                                                          |
+| [`exploit-pselect/`](exploit-pselect/) | **Archived**                     | Port of zainarbani a54x `COMPACT_RT_MUTEX_WAITER` pselect layout. Structurally sound but the pselect fd_set spray does not reliably trigger the CFI misroute on POCO 5.15.180. Superseded by `exploit-finale`'s pipe-based physrw, which achieves the same arbitrary R/W without depending on CFI. Archived in `backup/` (no value).                                                                                                  |
 
-**In short:** `exploit-finale` is the only variant that reaches root. `poc_air` and
-`poc-mcast` were research stepping stones. `exploit-mcast` and `exploit-pselect`
-are dead ends on this kernel.
+**In short:** `poc-mcast-root` is the active full-root attempt and `poc-mcast`
+proved the entry primitive + selinux-permissive flip. `exploit-finale` is
+**stalled** (no writer landed, configfs physrw dead on POCO). `exploit-mcast`,
+`exploit-pselect`, and `exploit-exp32` are archived in `backup/`.
 
 ---
 
-## 1. Basic  GhostLock info
+## 1. Basic GhostLock info
 
 ### The exploit primitive (shared by all variants)
+
 1. **KASLR leak.** The kernel text base is recovered at runtime. All variants
    use the **tracefs `sched_blocked_reason` leak** (event id 108, modal `caller`
    @ offset 16; `perf_event_paranoid = -1` on POCO, so it is allowed), with the
    perf-event leak and the boot_id/slide leak as fallbacks. `KIMAGE_TEXT_BASE =
-   0xffffffc008000000`; runtime VA = `base + slide + link_off`.
+0xffffffc008000000`; runtime VA = `base + slide + link_off`.
 2. **PI-cycle topology.** Two threads build a futex PI deadlock cycle
    (`-EDEADLK` via `FUTEX_CMP_REQUEUE_PI`) that leaves a `rt_mutex_waiter`
-   dangling on the *waiter* thread's kernel stack (`current->pi_blocked_on`
+   dangling on the _waiter_ thread's kernel stack (`current->pi_blocked_on`
    points at it). That waiter is the corruption target.
-3. **Stack overwrite.** A *second* syscall copies attacker bytes into its own
+3. **Stack overwrite.** A _second_ syscall copies attacker bytes into its own
    kernel-stack frame in a position that **coincides** with the dangling waiter.
    The bytes fake `waiter.task` / `waiter.lock` so the next
    `rt_mutex_adjust_prio_chain` (triggered by the consumer's
    `sched_setattr`/`sched_setscheduler`) walks into a fake object.
-4. **physrw + root.** The fake chain reclaims the sprayed page as a
-   pipe buffer → arbitrary kernel read/write, then patches `cred` and
-   `selinux_state->enforcing`.
+4. **physrw + root.** On POCO the configfs ashmem repoint feature is absent, so
+   the **configfs-based** physrw path is dead. The working escalation is the `rt_mutex`
+   `rb_erase` forge — a single controlled 8-byte UAF write via the
+   `rt_mutex_adjust_prio_chain` walk — that patches `selinux_state->enforcing`
+   and `cred`.
 
 ### The 5.15.180 landscape — the shared blocker
+
 The whole exploit hinges on **step 3**: the second syscall's stack frame must
-*coincide* in address with the dangling waiter. This is a per-boot,
+_coincide_ in address with the dangling waiter. This is a per-boot,
 per-thread **frame-offset coincidence**, not a total call-depth issue.
 
 - `rt_mutex_waiter` on 5.15.180 GKI is **compact**: `task @ +0x30`,
@@ -68,20 +74,27 @@ per-thread **frame-offset coincidence**, not a total call-depth issue.
 - `rt_mutex_adjust_prio_chain` prologue (5.15.180): `x19 = x0` = the **task**
   (1st arg), `x28 = task->0x8b0` = `task->pi_top_task` = the dangling waiter,
   and the fault at `+0x1b0` dereferences `*(waiter->lock)` (i.e. `x27 =
-  waiter->lock`).
+waiter->lock`).
 - The "frame-gap" that blocks one technique is **technique-specific**: it
-  depends on the distance between the futex frame and the *specific* overwrite
+  depends on the distance between the futex frame and the _specific_ overwrite
   syscall's frame. Different syscalls → different gaps.
 
 ### Common constraints
+
 - `randomize_kstack_offset` is **off** on this GKI build → displacement is
   deterministic per-boot (not parity-limited).
 - `CONFIG_DEBUG_RT_MUTEXES` is **not** set; `CONFIG_ANDROID_BINDER_IPC=y`.
+
 ---
 
-## 2. Exploit-finale — the working LPE
+## 2. Exploit-finale — STALLED / inactive reference
 
-The active variant. End-to-end path:
+> **STATUS (2026-08-20): STALLED.** On POCO air 5.15.180 none of its four stamp
+> writers landed (`x27=0` for mcast/mcast6/sendmsg/sigreturn) and its configfs
+> ashmem physrw escalation is dead (repoint feature absent on POCO). Kept only as
+> historical reference. The active root pursuit is `poc-mcast-root`.
+
+Formerly the active variant. End-to-end path (as designed):
 
 1. **KASLR leak** — tracefs `sched_blocked_reason` (primary; exact slide), perf
    min-kernel-IP (fallback), or slide/boot_id leak (tertiary).
@@ -99,16 +112,18 @@ The active variant. End-to-end path:
      `TRIGGER`), then spins syscall-free.
 4. **Consumer fires** — `sched_setattr(waiter_tid)` triggers
    `rt_mutex_adjust_prio_chain`, which reads the stamped `waiter->lock ==
-   fake_lock` and walks into the self-consistent fake tree (kernel stays alive).
+fake_lock` and walks into the self-consistent fake tree (kernel stays alive).
 5. **Pipe physrw primitive** — configfs ashmem fd + pipe buffer manipulation
    gives arbitrary physical kernel R/W (independent of the unreliable CFI
-   misroute).
+   misroute). **DEAD ON POCO:** the configfs ashmem bin-buffer repoint feature is
+   absent, so this escalation cannot fire here.
 6. **Escalation** — via physrw: patch `cred` (uid=0, gid=0, full caps,
    securebits=0, selinux sid=KERNEL_SID), clear seccomp bits, write
    `selinux_state.enforcing = 0`, fork root child (`setgid(0)`/`setuid(0)`),
    install embedded `su` daemon to `/data/local/tmp/su`.
 
 **Key design decisions:**
+
 - Bypasses the POCO-unreliable `fake_fops` CFI misroute entirely; physrw is
   wired directly after the UAF route.
 - `WAITER_OFF` is derived per-run via PROBE (`MCAST_PROBE_INDEX=1`), not
@@ -134,23 +149,26 @@ The exploit primitive is the same across all variants:
    use the **tracefs `sched_blocked_reason` leak** (event id 108, modal `caller`
    @ offset 16; `perf_event_paranoid = -1` on POCO, so it is allowed), with the
    perf-event leak and the boot_id/slide leak as fallbacks. `KIMAGE_TEXT_BASE =
-   0xffffffc008000000`; runtime VA = `base + slide + link_off`.
+0xffffffc008000000`; runtime VA = `base + slide + link_off`.
 2. **PI-cycle topology.** Two threads build a futex PI deadlock cycle
    (`-EDEADLK` via `FUTEX_CMP_REQUEUE_PI`) that leaves a `rt_mutex_waiter`
-   dangling on the *waiter* thread's kernel stack (`current->pi_blocked_on`
+   dangling on the _waiter_ thread's kernel stack (`current->pi_blocked_on`
    points at it). That waiter is the corruption target.
-3. **Stack overwrite.** A *second* syscall copies attacker bytes into its own
+3. **Stack overwrite.** A _second_ syscall copies attacker bytes into its own
    kernel-stack frame in a position that **coincides** with the dangling waiter.
    The bytes fake `waiter.task` / `waiter.lock` so the next
    `rt_mutex_adjust_prio_chain` (triggered by the consumer's
    `sched_setattr`/`sched_setscheduler`) walks into a fake object.
-4. **physrw + root.** The fake chain reclaims the sprayed page as a
-   pipe buffer → arbitrary kernel read/write, then patches `cred` and
-   `selinux_state->enforcing`.
+4. **physrw + root.** On POCO the configfs ashmem repoint feature is absent, so
+   the **configfs-based** physrw path is dead. The working escalation is the `rt_mutex`
+   `rb_erase` forge — a single controlled 8-byte UAF write via the
+   `rt_mutex_adjust_prio_chain` walk — that patches `selinux_state->enforcing`
+   and `cred`.
 
 ### The 5.15.180 landscape — the shared blocker
+
 The whole exploit hinges on **step 3**: the second syscall's stack frame must
-*coincide* in address with the dangling waiter. This is a per-boot,
+_coincide_ in address with the dangling waiter. This is a per-boot,
 per-thread **frame-offset coincidence**, not a total call-depth issue.
 
 - `rt_mutex_waiter` on 5.15.180 GKI is **compact**: `task @ +0x30`,
@@ -162,12 +180,13 @@ per-thread **frame-offset coincidence**, not a total call-depth issue.
 - `rt_mutex_adjust_prio_chain` prologue (5.15.180): `x19 = x0` = the **task**
   (1st arg), `x28 = task->0x8b0` = `task->pi_top_task` = the dangling waiter,
   and the fault at `+0x1b0` dereferences `*(waiter->lock)` (i.e. `x27 =
-  waiter->lock`).
+waiter->lock`).
 - The "frame-gap" that blocks one technique is **technique-specific**: it
-  depends on the distance between the futex frame and the *specific* overwrite
+  depends on the distance between the futex frame and the _specific_ overwrite
   syscall's frame. Different syscalls → different gaps.
 
 ### Common constraints
+
 - `randomize_kstack_offset` is **off** on this GKI build → displacement is
   deterministic per-boot (not parity-limited).
 - `CONFIG_DEBUG_RT_MUTEXES` is **not** set; `CONFIG_ANDROID_BINDER_IPC=y`.
@@ -185,6 +204,7 @@ single; no serial needed. `run.sh` may reboot the device on a successful
 pivot — output is captured to `runlogs/` (partial).
 
 ### exploit-finale (active target)
+
 ```bash
 cd exploit-finale
 ./build.sh                       # make -> build/.../bin/preload.so
@@ -195,6 +215,7 @@ cd exploit-finale
 ```
 
 ### poc_air (research binary)
+
 ```bash
 cd poc_air
 ./build.sh                       # clang -O2 -static -pthread -> ./poc_air
@@ -204,6 +225,7 @@ cd poc_air
 ```
 
 ### exploit-mcast (reference only — geometrically insufficient)
+
 ```bash
 cd exploit-mcast
 ./build.sh
@@ -212,6 +234,7 @@ cd exploit-mcast
 ```
 
 ### exploit-pselect (reference only — CFI route unreliable)
+
 ```bash
 cd exploit-pselect
 ./build.sh
@@ -258,7 +281,8 @@ Public / upstream repositories used during this work:
 ## Disclaimer
 
 Research / educational use only. Targets the author's own device. `exploit-finale`
-is the only variant documented as functional for privilege escalation on POCO
-air 5.15.180 GKI. `poc_air` and `poc-mcast` proved the primitive but did not
-complete the full chain. `exploit-mcast` and `exploit-pselect` are documented
-as non-functional on this kernel due to frame-gap / CFI reliability issues.
+is **stalled** (no writer landed, configfs physrw dead); `poc-mcast` proved the
+entry primitive and the selinux-permissive flip on POCO air 5.15.180 GKI, and
+`poc-mcast-root` is the active full-root attempt. `exploit-mcast`,
+`exploit-pselect`, and `exploit-exp32` are archived in `backup/` as
+non-functional on this kernel.

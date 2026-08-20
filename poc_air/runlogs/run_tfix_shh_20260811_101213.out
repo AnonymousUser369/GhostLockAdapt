@@ -1,5 +1,0 @@
-[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=sendmsg
-[kaslr] slide reject 0000002c6ba4315c (mode ffffffec73bbb66c cnt 1896)
-[kaslr] FATAL: perf leak failed
-ENFORCE=Enforcing
-EXIT=0

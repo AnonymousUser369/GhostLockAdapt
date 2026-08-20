@@ -1,15 +1,13 @@
 # Local / private material — never push to GitHub
 local-other/
+analysis/
 backup/
-# exploit-pselect/runlogs
-# exploit-mcast/runlogs
-# poc_air/runlogs
+payload-port
+exploit-finale/src.bak*
 
 CONTEXT.md
-poc_air/CONTEXT.md
-poc-mcast/CONTEXT.md
-exploit-mcast/CONTEXT.md
-exploit-pselect/CONTEXT.md
+*/CONTEXT.md
+*/runlogs/
 
 # Editor / OS noise
 *.swp

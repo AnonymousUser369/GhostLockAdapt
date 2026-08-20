@@ -1,5 +1,0 @@
-[main] g_iov_idx=0 (override with IOV_IDX=k)  spray=sendmsg
-[kaslr] no sched_blocked_reason samples
-[kaslr] FATAL: perf leak failed
-ENFORCE=Enforcing
-EXIT=0

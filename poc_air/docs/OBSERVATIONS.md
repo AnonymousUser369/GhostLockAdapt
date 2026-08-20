@@ -1,5 +1,15 @@
 # poc_air — Empirical Observations
 
+> **2026-08-18 CORRECTION — the "page-table mismatch / pivot to physrw" conclusion is wrong.**
+> The `pmd=0`/`pgd=0` faults documented below were computed at the **raw** nm `ksym_offs[]`
+> offsets (+0x8000000 too high for BSS/DATA), so they landed 128 MB above the genuinely-mapped
+> `.bss` block. The slide/leak was correct; the **offsets** were wrong. poc-mcast PROVED `.bss` is
+> mapped on this exact POCO air device (selinux flip via `z_pagemap_global+0x1200`). The fix
+> (subtract `0x8000000` from every `ksym_offs[]` entry, matching poc-mcast's values) was applied
+> 2026-08-18 — see `CONTEXT.md` "LATEST (2026-08-18)". Re-test the DEFAULT `uid_lock` anchor with
+> the offset fix before pivoting to physrw. Blocker B (sendmsg `D=+0x38` can't reach `tree_entry`)
+> remains the genuine blocker for the `rt_mutex` forge.
+
 ## Code versions
 
 | Version | Write primitive | PROBE sentinels | Status |
@@ -155,7 +165,7 @@ Two independent proofs now fix the mapping:
 
 ---
 
-## fake_lock fault — ROOT CAUSE (verified 2026-08-11)
+## fake_lock fault — ROOT CAUSE (verified 2026-08-11; **superseded 2026-08-18 — see top CORRECTION**)
 
 **Question:** if `ksym_offs[]` values are correct (verified via nm + VERIFICATION.md), why does `fake_lock` translation-fault?
 

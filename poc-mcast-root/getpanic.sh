@@ -2,7 +2,7 @@
 # getpanic.sh — retrieve console-ramoops-0, save raw + extract panic portion.
 # Usage: getpanic.sh [tag]
 set -u
-DIR=/mnt/Data/AI_Workspace/ghostlock_repo/exploit-finale
+DIR=/mnt/Data/AI_Workspace/ghostlock_repo/poc-mcast
 LOGDIR=$DIR/runlogs
 TAG="${1:-panic}"
 TS=$(date +%Y%m%d_%H%M%S)
@@ -13,26 +13,19 @@ mkdir -p "$LOGDIR"
 
 echo "[*] pull /sys/fs/pstore/console-ramoops-0"
 adb shell "cat /sys/fs/pstore/console-ramoops-0" > "$TMP" 2>/dev/null
-echo "[*] extract panic (from first 'Unable to handle') -> $PAN"
-awk '/Unable to handle/{f=1} f{print}' "$TMP" > "$PAN"
+echo "[*] extract crash (from first 'Unable to handle' OR 'kernel BUG at' OR 'cut here') -> $PAN"
+awk '/Unable to handle/{if(!f)f=1} /kernel BUG at/{if(!f)f=1} /----\[ cut here \]----/{if(!f)f=1} f{print}' "$TMP" > "$PAN"
 rm -f "$TMP"
 echo "[*] panic summary:"
-grep -nE "Unable to handle|pc :|rt_mutex_adjust_prio|adjust_pi|sched_setscheduler|Oops|Call trace|Kernel Offset" "$PAN" | head -25
+grep -nE "Unable to handle|kernel BUG at|BUG:|pc :|rt_mutex_adjust_prio|adjust_pi|sched_setscheduler|Oops|Call trace|Kernel Offset" "$PAN" | head -25
 echo "[*] all registers:"
 grep -E "x[0-9]+:|sp :|lr :|pc :" "$PAN" | head -40
-echo "[*] sentinel hunt (CASTLOC 0x4D434153544C4F43 = 'CASTLOC' ascii):"
-grep -oE "4d434153544c4f43" "$PAN" | sort | uniq -c | sort -rn | head -20
+echo "[*] sentinel hunt (MCASTLOC / 0xabcdef00xx):"
+grep -oE "0x4D434153544C4F43|0xabcdef00[0-9a-f]{2}" "$PAN" | sort | uniq -c | sort -rn | head -20
 echo "[*] x27 / x19 (waiter lock / waiter base):"
 grep -E "x27:|x19:" "$PAN" | head -10
-echo "[*] fault address (virtual address line):"
+echo "[*] fault address:"
 grep -E "virtual address|\[ffffff" "$PAN" | head -5
-
-echo "[*] FULL register dump (all x0..x30, sp/lr/pc):"
-# Registers appear on lines like:   x0 : <val> x1 : <val> ... (wrapped) or
-#   x27: 0000000000000000 x26: ffffff80127a9200  (single-line, no spaces around colon)
-# Match any token of the form x<N> or sp/lr/pc followed by a colon and a value.
-grep -oE "\b(x[0-9]{1,2}|sp|lr|pc|pstate|fault_address) *: *[0-9a-fx]+" "$PAN" \
-  | sed -E 's/ *: */: /' | sort -u | head -60
 
 LATEST=$(ls -t "$LOGDIR"/run_*.out 2>/dev/null | head -1)
 if [ -n "$LATEST" ]; then
