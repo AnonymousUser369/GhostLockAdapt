@@ -10,7 +10,7 @@ walk into attacker-controlled memory. That yields an arbitrary kernel
 read/write primitive, which is used to patch `cred` (uid/gid → 0, full caps)
 and set `selinux_state->enforcing = 0`.
 
-> **Target device:** POCO air / Redmi 13C 5G / POCO M6 5G — codename `air`,
+> **Target device:** Redmi 13C 5G / POCO M6 5G — codename `air`,
 > build `AP3A.240905.015.A2`, Android 15, kernel **5.15.180-android13 GKI**
 
 Work done by AI since its beyond what i could ever do 😅
@@ -19,14 +19,13 @@ Work done by AI since its beyond what i could ever do 😅
 
 ## 1. Variant status
 
-| Variant                                | Status                           | Role                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| -------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`exploit-finale/`](exploit-finale/)   | **STALLED** (inactive reference) | Full LPE. Combines tracefs KASLR, UAF stamp (mcast/sendmsg), PI-walk consumer, pipe physrw, and embedded su daemon. STALLED: none of its 4 stamp writers landed on POCO (`x27=0` for mcast/mcast6/sendmsg/sigreturn) and its configfs ashmem physrw escalation is dead (repoint feature absent). Inactive reference only.                                                                                                             |
-| [`poc_air/`](poc_air/)                 | **Partial success**              | Proved the `sendmmsg` iovec spray lands on the dangling waiter (`iov[0]` = `waiter->lock`, +0x38 displacement). Could not reach root because every static kernel-symbol `fake_lock` candidate faults (`pmd=0`/`pgd=0`) on POCO 5.15.180. Both the `rb_erase` forge and the pipe-buffer route are pursued escalation avenues (configfs physrw is dead on POCO); its probe methodology and spray layout are reused in `exploit-finale`. |
-| [`poc-mcast/`](poc-mcast/)             | **Partial success**              | Proved the IPv4 `MCAST_BLOCK_SOURCE` setsockopt stamp works and derived `WAITER_OFF = 0x60` via PROBE, and **proved the selinux-permissive flip** via the `rb_erase` forge (run `p1c`). Clean-exit deadlock on POCO is the remaining blocker.                                                                                                                                                                                         |
-| [`poc-mcast-root/`](poc-mcast-root/)   | **Active — full root**           | Full-root pursuit deriving from `poc_mcastv2`. Proven IPv4 `MCAST_BLOCK_SOURCE` stamp (`WAITER_OFF=0x60`) flips selinux permissive; extends the `rb_erase` forge to patch `cred` for full root. Clean-exit / device-usability is the open blocker.                                                                                                                                                                                    |
-| [`exploit-mcast/`](exploit-mcast/)     | **Archived**                     | Native 64-bit arm64 `MCAST_JOIN_SOURCE_GROUP` writer. The 0x108 copy is geometrically insufficient on POCO 5.15.180 (waiter sits outside the copy window). Archived in `backup/` (no value).                                                                                                                                                                                                                                          |
-| [`exploit-pselect/`](exploit-pselect/) | **Archived**                     | Port of zainarbani a54x `COMPACT_RT_MUTEX_WAITER` pselect layout. Structurally sound but the pselect fd_set spray does not reliably trigger the CFI misroute on POCO 5.15.180. Superseded by `exploit-finale`'s pipe-based physrw, which achieves the same arbitrary R/W without depending on CFI. Archived in `backup/` (no value).                                                                                                  |
+| Variant                                       | Status                           | Role                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`exploit-finale/`](exploit-finale/)          | **STALLED** (inactive reference) | Full LPE. Combines tracefs KASLR, UAF stamp (mcast/sendmsg), PI-walk consumer, pipe physrw, and embedded su daemon. STALLED: none of its 4 stamp writers landed on POCO (`x27=0` for mcast/mcast6/sendmsg/sigreturn) and its configfs ashmem physrw escalation is dead (repoint feature absent). Inactive reference only.                                                                                                             |
+| [`poc_air/`](poc_air/)                        | **Partial success**              | Proved the `sendmmsg` iovec spray lands on the dangling waiter (`iov[0]` = `waiter->lock`, +0x38 displacement). Could not reach root because every static kernel-symbol `fake_lock` candidate faults (`pmd=0`/`pgd=0`) on POCO 5.15.180. Both the `rb_erase` forge and the pipe-buffer route are pursued escalation avenues (configfs physrw is dead on POCO); its probe methodology and spray layout are reused in `exploit-finale`. |
+| [`poc-mcast/`](poc-mcast/)                    | **Partial success**              | Proved the IPv4 `MCAST_BLOCK_SOURCE` setsockopt stamp works and derived `WAITER_OFF = 0x60` via PROBE, and **proved the selinux-permissive flip** via the `rb_erase` forge (run `p1c`). Clean-exit deadlock on POCO is the remaining blocker.                                                                                                                                                                                         |
+| [`poc-mcast-root/`](poc-mcast-root/)          | **Active — full root**           | Full-root pursuit deriving from `poc_mcastv2`. Proven IPv4 `MCAST_BLOCK_SOURCE` stamp (`WAITER_OFF=0x60`) flips selinux permissive; extends the `rb_erase` forge to patch `cred` for full root. Clean-exit / device-usability is the open blocker.                                                                                                                                                                                    |
+| exploit-mcast, exploit-pselect, exploit-exp32 | **Archived**                     |                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 **In short:** `poc-mcast-root` is the active full-root attempt and `poc-mcast`
 proved the entry primitive + selinux-permissive flip. `exploit-finale` is
@@ -139,7 +138,6 @@ timing diagram. `docs/WRITE-PRIMITIVES.md` covers both stamps. `docs/KASLR-METHO
 covers all three leak methods. `docs/ESCALATION.md` covers root. `docs/FAKE-FOPS.md`
 documents the bypassed CFI route for reference.
 
-
 ## 4. Build & run
 
 <details>
@@ -197,14 +195,10 @@ cd exploit-pselect
 
 Public / upstream repositories used during this work:
 
-- **CyberMeowfia / IonStack — CVE-2026-43499** (upstream):
-  https://github.com/NebuSec/CyberMeowfia
-- **zainarbani / Root-My-Galaxy-Payloads** — a54x `COMPACT_RT_MUTEX_WAITER`
-  pselect breakthrough (write-0 to `selinux_state->enforcing` on 5.15.189):
-  https://github.com/zainarbani/Root-My-Galaxy-Payloads (branch `a54x`)
-- **oppo-ghostlock** — 5.10 analysis / "waiter 120 bytes below fd_set"
-  frame-gap proof: https://github.com/pubglite55/oppo-ghostlock
-- probably more
+- **[CyberMeowfia](https://github.com/NebuSec/CyberMeowfia) / IonStack — CVE-2026-43499** (upstream)
+- **[zainarbani / Root-My-Galaxy-Payloads](https://github.com/zainarbani/Root-My-Galaxy-Payloads)**
+- **[oppo-ghostlock](https://github.com/pubglite55/oppo-ghostlock)**
+- many more, will update later
 
 ## 6. Documentation
 
@@ -227,9 +221,4 @@ Public / upstream repositories used during this work:
 
 ## Disclaimer
 
-Research / educational use only. Targets the author's own device. `exploit-finale`
-is **stalled** (no writer landed, configfs physrw dead); `poc-mcast` proved the
-entry primitive and the selinux-permissive flip on POCO air 5.15.180 GKI, and
-`poc-mcast-root` is the active full-root attempt. `exploit-mcast`,
-`exploit-pselect`, and `exploit-exp32` are archived in `backup/` as
-non-functional on this kernel.
+Research / educational use only. Targets the author's own device.

